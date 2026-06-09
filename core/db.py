@@ -177,6 +177,13 @@ def _migrate_legacy_users_table(db_cursor) -> None:
             WHERE password_hash IS NULL OR password_hash = ''
             """
         )
+        db_cursor.execute(
+            """
+            ALTER TABLE scm_users
+            MODIFY password VARCHAR(100) NULL DEFAULT NULL
+            COMMENT '旧版明文密码字段，已由 password_hash 替代'
+            """
+        )
     else:
         db_cursor.execute(
             """
