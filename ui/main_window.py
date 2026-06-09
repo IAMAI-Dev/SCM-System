@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from core.config import load_app_config
 from service.auth_service import UserSession
+from ui.pages.dashboard_page import DashboardPage
 
 
 class MainWindow(QMainWindow):
@@ -120,7 +121,7 @@ class MainWindow(QMainWindow):
         self.stack.setContentsMargins(18, 18, 18, 18)
         layout.addWidget(self.stack, 1)
 
-        self._add_placeholder_page("dashboard", "总览仪表盘")
+        self._add_page("dashboard", "总览仪表盘", DashboardPage())
         self._add_placeholder_page("orders", "订单管理")
         self._add_placeholder_page("inventory", "库存调度")
         self._add_placeholder_page("customers", "客户管理")
@@ -128,6 +129,16 @@ class MainWindow(QMainWindow):
         self._add_placeholder_page("users", "用户权限")
         self._add_placeholder_page("logs", "审计日志")
         return workspace
+
+    def _add_page(
+        self,
+        page_key: str,
+        title: str,
+        widget: QWidget,
+    ) -> None:
+        """添加业务页面。"""
+        self.page_titles[page_key] = title
+        self.stack.addWidget(widget)
 
     def _build_top_bar(self) -> QFrame:
         """构建顶部工具栏。"""
