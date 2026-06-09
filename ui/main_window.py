@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 from core.config import load_app_config
 from service.auth_service import UserSession
 from ui.pages.dashboard_page import DashboardPage
+from ui.pages.inventory_page import InventoryPage
+from ui.pages.orders_page import OrdersPage
 
 
 class MainWindow(QMainWindow):
@@ -122,8 +124,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.stack, 1)
 
         self._add_page("dashboard", "总览仪表盘", DashboardPage())
-        self._add_placeholder_page("orders", "订单管理")
-        self._add_placeholder_page("inventory", "库存调度")
+        self._add_page("orders", "订单管理", OrdersPage(self.user_session))
+        self._add_page(
+            "inventory",
+            "库存调度",
+            InventoryPage(self.user_session),
+        )
         self._add_placeholder_page("customers", "客户管理")
         self._add_placeholder_page("suppliers", "供应商分析")
         self._add_placeholder_page("users", "用户权限")
