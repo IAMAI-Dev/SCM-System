@@ -11,8 +11,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SKIP_PARTS = {".git", ".venv", ".idea", "__pycache__"}
 SKIP_FILES = {"config.ini", ".env"}
 FORBIDDEN_SNIPPETS = {
-    "chen" + "218510",
-    "Zggczyqnt" + "202054",
+    "D:" + "\\Database_Learning",
+    "team" + "_exp",
+    "database = " + "ex" + "p1",
+    "SCM_DB_NAME" + '", "' + "ex" + "p1",
+    "experiment" + "2024",
 }
 
 

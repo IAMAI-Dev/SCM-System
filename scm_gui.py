@@ -9,7 +9,7 @@ DB_CONFIG = {
     "host": os.getenv("SCM_DB_HOST", "localhost"),
     "user": os.getenv("SCM_DB_USER", "root"),
     "password": os.getenv("SCM_DB_PASSWORD", ""),
-    "database": os.getenv("SCM_DB_NAME", "exp1"),
+    "database": os.getenv("SCM_DB_NAME", "experiment2026"),
 }
 
 

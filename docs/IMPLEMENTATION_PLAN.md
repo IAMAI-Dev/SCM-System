@@ -5,7 +5,7 @@
 将当前 Tkinter 单文件项目升级为 PySide6 + MySQL 的分层桌面系统。
 新版主入口为 `main.py`，旧 `scm_gui.py` 仅作为 legacy 参考。
 
-默认数据库为本地 MySQL `exp1`。系统需支持登录、权限、仪表盘、
+默认数据库为 MySQL `experiment2026`。系统需支持登录、权限、仪表盘、
 订单、库存、客户、供应商、用户管理和审计日志。
 
 ## 二、阶段与提交
@@ -77,6 +77,6 @@ python -m compileall .
 ## 四、默认假设
 
 - GUI 框架采用 PySide6。
-- 默认数据库为 `exp1`。
+- 默认数据库为 `experiment2026`。
 - 真实数据库密码由本地 `config.ini` 或环境变量提供。
 - 不修改外层 `Plan` 目录下的辅助材料。

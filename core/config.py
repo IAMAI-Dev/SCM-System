@@ -67,7 +67,7 @@ def load_database_config() -> DatabaseConfig:
         ),
         database=os.getenv(
             "SCM_DB_NAME",
-            parser.get("database", "database", fallback="exp1"),
+                parser.get("database", "database", fallback="experiment2026"),
         ),
         pool_name=parser.get(
             "database",
@@ -83,6 +83,10 @@ def load_app_config() -> AppConfig:
     parser = _load_parser()
     return AppConfig(
         warehouse=parser.get("app", "warehouse", fallback="华东总仓"),
-        account_set=parser.get("app", "account_set", fallback="exp1"),
+        account_set=parser.get(
+            "app",
+            "account_set",
+            fallback="experiment2026",
+        ),
         theme=parser.get("app", "theme", fallback="industrial"),
     )

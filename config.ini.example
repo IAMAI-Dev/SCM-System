@@ -3,11 +3,11 @@ host = localhost
 port = 3306
 user = root
 password =
-database = exp1
+database = experiment2026
 pool_name = scm_pool
 pool_size = 5
 
 [app]
 warehouse = 华东总仓
-account_set = exp1
+account_set = experiment2026
 theme = industrial
