@@ -113,6 +113,8 @@ def initialize_database_objects() -> None:
                 db_cursor.execute(statement)
                 while db_cursor.nextset():
                     pass
+            if script_name == "01_app_tables.sql":
+                _migrate_legacy_users_table(db_cursor)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -149,3 +151,93 @@ def _split_sql_statements(sql_content: str) -> list[str]:
     if trailing:
         statements.append(trailing)
     return statements
+
+
+def _migrate_legacy_users_table(db_cursor) -> None:
+    """兼容旧版 scm_users 表结构。"""
+    columns = _get_table_columns(db_cursor, "scm_users")
+    if not columns:
+        return
+
+    if "password_hash" not in columns:
+        db_cursor.execute(
+            """
+            ALTER TABLE scm_users
+            ADD COLUMN password_hash CHAR(64) NULL COMMENT 'SHA2 密码摘要'
+            AFTER username
+            """
+        )
+        columns.add("password_hash")
+
+    if "password" in columns:
+        db_cursor.execute(
+            """
+            UPDATE scm_users
+            SET password_hash = SHA2(password, 256)
+            WHERE password_hash IS NULL OR password_hash = ''
+            """
+        )
+    else:
+        db_cursor.execute(
+            """
+            UPDATE scm_users
+            SET password_hash = SHA2('123456', 256)
+            WHERE password_hash IS NULL OR password_hash = ''
+            """
+        )
+
+    migrations = {
+        "display_name": (
+            "ALTER TABLE scm_users "
+            "ADD COLUMN display_name VARCHAR(80) NULL COMMENT '显示名称' "
+            "AFTER password_hash"
+        ),
+        "is_active": (
+            "ALTER TABLE scm_users "
+            "ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 "
+            "COMMENT '是否启用' AFTER can_delete"
+        ),
+        "updated_at": (
+            "ALTER TABLE scm_users "
+            "ADD COLUMN updated_at TIMESTAMP NOT NULL "
+            "DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+        ),
+    }
+    for column_name, statement in migrations.items():
+        if column_name not in columns:
+            db_cursor.execute(statement)
+            columns.add(column_name)
+
+    db_cursor.execute(
+        """
+        UPDATE scm_users
+        SET display_name = username
+        WHERE display_name IS NULL OR display_name = ''
+        """
+    )
+    db_cursor.execute(
+        """
+        ALTER TABLE scm_users
+        MODIFY password_hash CHAR(64) NOT NULL COMMENT 'SHA2 密码摘要'
+        """
+    )
+    db_cursor.execute(
+        """
+        ALTER TABLE scm_users
+        MODIFY display_name VARCHAR(80) NOT NULL COMMENT '显示名称'
+        """
+    )
+
+
+def _get_table_columns(db_cursor, table_name: str) -> set[str]:
+    """读取指定表的字段集合。"""
+    db_cursor.execute(
+        """
+        SELECT COLUMN_NAME
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+            AND table_name = %s
+        """,
+        (table_name,),
+    )
+    return {row[0] for row in db_cursor.fetchall()}

@@ -9,6 +9,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SKIP_PARTS = {".git", ".venv", ".idea", "__pycache__"}
+SKIP_FILES = {"config.ini", ".env"}
 FORBIDDEN_SNIPPETS = {
     "chen" + "218510",
     "Zggczyqnt" + "202054",
@@ -20,6 +21,8 @@ def _iter_project_files() -> list[Path]:
     result = []
     for path in PROJECT_ROOT.rglob("*"):
         if any(part in SKIP_PARTS for part in path.parts):
+            continue
+        if path.name in SKIP_FILES:
             continue
         if path.is_file():
             result.append(path)
