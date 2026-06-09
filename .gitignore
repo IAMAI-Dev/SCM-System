@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# Local configuration
+config.ini
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# Runtime output
+logs/
+exports/
+*.log
