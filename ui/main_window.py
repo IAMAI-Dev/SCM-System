@@ -19,9 +19,13 @@ from PySide6.QtWidgets import (
 
 from core.config import load_app_config
 from service.auth_service import UserSession
+from ui.pages.customers_page import CustomersPage
 from ui.pages.dashboard_page import DashboardPage
 from ui.pages.inventory_page import InventoryPage
+from ui.pages.logs_page import LogsPage
 from ui.pages.orders_page import OrdersPage
+from ui.pages.suppliers_page import SuppliersPage
+from ui.pages.users_page import UsersPage
 
 
 class MainWindow(QMainWindow):
@@ -130,10 +134,14 @@ class MainWindow(QMainWindow):
             "库存调度",
             InventoryPage(self.user_session),
         )
-        self._add_placeholder_page("customers", "客户管理")
-        self._add_placeholder_page("suppliers", "供应商分析")
-        self._add_placeholder_page("users", "用户权限")
-        self._add_placeholder_page("logs", "审计日志")
+        self._add_page(
+            "customers",
+            "客户管理",
+            CustomersPage(self.user_session),
+        )
+        self._add_page("suppliers", "供应商分析", SuppliersPage())
+        self._add_page("users", "用户权限", UsersPage(self.user_session))
+        self._add_page("logs", "审计日志", LogsPage(self.user_session))
         return workspace
 
     def _add_page(
