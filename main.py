@@ -4,6 +4,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+from core.db import DatabaseError, initialize_database_objects
 from ui.login_dialog import LoginDialog
 from ui.main_window import MainWindow
 from ui.styles import INDUSTRIAL_QSS
@@ -13,6 +14,13 @@ def main() -> int:
     """启动 PySide6 应用。"""
     app = QApplication(sys.argv)
     app.setStyleSheet(INDUSTRIAL_QSS)
+    try:
+        initialize_database_objects()
+    except DatabaseError as exc:
+        QMessageBox.warning(None, "数据库初始化失败", str(exc))
+    except Exception as exc:
+        QMessageBox.warning(None, "数据库初始化失败", f"初始化异常：{exc}")
+
     login_dialog = LoginDialog()
     if login_dialog.exec() != LoginDialog.DialogCode.Accepted:
         return 0

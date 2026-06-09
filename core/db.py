@@ -92,3 +92,60 @@ def reset_pool() -> None:
 def sql_path(file_name: str) -> Path:
     """获取 SQL 脚本绝对路径。"""
     return PROJECT_ROOT / "sql" / file_name
+
+
+def initialize_database_objects() -> None:
+    """初始化应用辅助表和数据库课程对象。"""
+    script_names = [
+        "01_app_tables.sql",
+        "02_views.sql",
+        "03_procedures.sql",
+        "04_triggers.sql",
+        "05_seed.sql",
+    ]
+    conn = get_connection()
+    db_cursor = conn.cursor()
+    try:
+        for script_name in script_names:
+            path = sql_path(script_name)
+            content = path.read_text(encoding="utf-8")
+            for statement in _split_sql_statements(content):
+                db_cursor.execute(statement)
+                while db_cursor.nextset():
+                    pass
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        db_cursor.close()
+        conn.close()
+
+
+def _split_sql_statements(sql_content: str) -> list[str]:
+    """按 MySQL DELIMITER 规则拆分 SQL 脚本。"""
+    delimiter = ";"
+    statements: list[str] = []
+    buffer: list[str] = []
+
+    for line in sql_content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("--"):
+            continue
+
+        if stripped.upper().startswith("DELIMITER "):
+            delimiter = stripped.split(maxsplit=1)[1]
+            continue
+
+        buffer.append(line)
+        if stripped.endswith(delimiter):
+            statement = "\n".join(buffer)
+            statement = statement[: -len(delimiter)].strip()
+            if statement:
+                statements.append(statement)
+            buffer = []
+
+    trailing = "\n".join(buffer).strip()
+    if trailing:
+        statements.append(trailing)
+    return statements

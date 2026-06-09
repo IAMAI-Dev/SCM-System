@@ -1,13 +1,15 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
+import os
+
 import mysql.connector
 
 # 数据库配置
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "chen218510",
-    "database": "experiment2024"
+    "host": os.getenv("SCM_DB_HOST", "localhost"),
+    "user": os.getenv("SCM_DB_USER", "root"),
+    "password": os.getenv("SCM_DB_PASSWORD", ""),
+    "database": os.getenv("SCM_DB_NAME", "exp1"),
 }
 
 
