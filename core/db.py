@@ -40,6 +40,7 @@ def get_pool() -> pooling.MySQLConnectionPool:
         except mysql.connector.Error as exc:
             raise DatabaseError(
                 "无法连接到 MySQL 数据库，请检查 config.ini 或环境变量。"
+                f"\n原始错误：{exc}"
             ) from exc
     return _pool
 
@@ -49,7 +50,7 @@ def get_connection():
     try:
         return get_pool().get_connection()
     except mysql.connector.Error as exc:
-        raise DatabaseError("获取数据库连接失败。") from exc
+        raise DatabaseError(f"获取数据库连接失败：{exc}") from exc
 
 
 @contextmanager
@@ -60,7 +61,7 @@ def cursor(dictionary: bool = True) -> Iterator:
     try:
         yield db_cursor
     except mysql.connector.Error as exc:
-        raise DatabaseError("执行数据库查询失败。") from exc
+        raise DatabaseError(f"执行数据库查询失败：{exc}") from exc
     finally:
         db_cursor.close()
         conn.close()
@@ -115,6 +116,7 @@ def initialize_database_objects() -> None:
                     pass
             if script_name == "01_app_tables.sql":
                 _migrate_legacy_users_table(db_cursor)
+                _migrate_legacy_logs_table(db_cursor)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -248,3 +250,29 @@ def _get_table_columns(db_cursor, table_name: str) -> set[str]:
         (table_name,),
     )
     return {row[0] for row in db_cursor.fetchall()}
+
+
+def _migrate_legacy_logs_table(db_cursor) -> None:
+    """兼容旧版 scm_logs 表结构。"""
+    columns = _get_table_columns(db_cursor, "scm_logs")
+    if not columns:
+        return
+
+    if "created_at" not in columns:
+        db_cursor.execute(
+            """
+            ALTER TABLE scm_logs
+            ADD COLUMN created_at TIMESTAMP NOT NULL
+            DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+            """
+        )
+        columns.add("created_at")
+
+    if "log_time" in columns:
+        db_cursor.execute(
+            """
+            UPDATE scm_logs
+            SET created_at = log_time
+            WHERE log_time IS NOT NULL
+            """
+        )
