@@ -100,6 +100,7 @@ class ChartCanvas(FigureCanvasQTAgg):
             return
 
         names = [_short_name(row["supplier_name"]) for row in rows]
+        full_names = [row["supplier_name"] for row in rows]
         values = [int(row["part_count"] or 0) for row in rows]
 
         def render(progress: float) -> None:
@@ -111,13 +112,17 @@ class ChartCanvas(FigureCanvasQTAgg):
                 color=COPPER,
             )
             _style_axis(ax)
-            ax.tick_params(axis="x", labelrotation=0, labelsize=8)
+            ax.tick_params(axis="x", labelrotation=12, labelsize=8)
             _apply_chinese_font(ax)
             self._set_hover_targets(
                 ax,
                 [
-                    (bar, f"{name}\n供应件数：{value}")
-                    for bar, name, value in zip(bars, names, values)
+                    (bar, f"{full_name}\n供应件数：{value}")
+                    for bar, full_name, value in zip(
+                        bars,
+                        full_names,
+                        values,
+                    )
                 ],
             )
             self.figure.tight_layout(pad=1.0)
@@ -362,9 +367,9 @@ def _set_text_font(text) -> None:
 
 def _short_name(name: str) -> str:
     """生成较短的供应商名称标签。"""
-    if len(name) <= 6:
+    if len(name) <= 4:
         return name
-    return name[:6]
+    return name[:4] + "..."
 
 
 def _month_label(value: str) -> str:

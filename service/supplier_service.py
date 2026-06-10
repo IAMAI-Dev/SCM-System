@@ -33,7 +33,7 @@ class SupplierService:
         ranked = self._rank_suppliers(suppliers)
         return {
             "kpis": self._build_kpis(summary, ranked, trend),
-            "bar_data": ranked[:8],
+            "bar_data": ranked[:5],
             "country_data": countries,
             "trend_data": trend,
             "ranking": ranked[:20],
