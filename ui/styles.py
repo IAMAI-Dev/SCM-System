@@ -106,10 +106,25 @@ QPushButton#primary_button:hover {
 }
 
 QFrame#content_panel,
-QFrame#login_panel {
+QFrame#login_panel,
+QFrame#analytics_card {
     background-color: #fffdf8;
     border: 1px solid #d7d2c8;
     border-radius: 6px;
+}
+
+QLabel#section_title {
+    background-color: transparent;
+    color: #252525;
+    font-size: 11pt;
+    font-weight: 700;
+}
+
+QLabel#kpi_value {
+    background-color: transparent;
+    color: #252525;
+    font-size: 20pt;
+    font-weight: 700;
 }
 
 QLabel#login_title {
@@ -145,5 +160,23 @@ QTableView {
 
 QTableView::item {
     padding: 5px;
+}
+
+QTableWidget {
+    background-color: #fffdf8;
+    alternate-background-color: #fbf7ef;
+    border: 1px solid #d7d2c8;
+    gridline-color: #e6dfd2;
+    selection-background-color: #f0d8ae;
+    selection-color: #252525;
+}
+
+QTableWidget::item {
+    padding: 5px;
+}
+
+QScrollArea {
+    border: none;
+    background-color: #f3f1ec;
 }
 """
