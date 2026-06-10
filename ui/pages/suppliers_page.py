@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -189,7 +189,7 @@ class SuppliersPage(QWidget):
         """生成评分进度条。"""
         bar = QProgressBar()
         bar.setRange(0, 100)
-        bar.setValue(score)
+        bar.setValue(0)
         bar.setTextVisible(True)
         bar.setFormat(f"{score}")
         color = "#4f7d5a" if score >= 92 else "#b56b2a"
@@ -207,4 +207,10 @@ class SuppliersPage(QWidget):
             "border-radius: 3px;"
             "}"
         )
+        bar.animation = QPropertyAnimation(bar, b"value", bar)
+        bar.animation.setStartValue(0)
+        bar.animation.setEndValue(score)
+        bar.animation.setDuration(760)
+        bar.animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        bar.animation.start()
         return bar

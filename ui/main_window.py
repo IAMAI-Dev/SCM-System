@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from collections.abc import Callable
+
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -19,13 +21,6 @@ from PySide6.QtWidgets import (
 
 from core.config import load_app_config
 from service.auth_service import UserSession
-from ui.pages.customers_page import CustomersPage
-from ui.pages.dashboard_page import DashboardPage
-from ui.pages.inventory_page import InventoryPage
-from ui.pages.logs_page import LogsPage
-from ui.pages.orders_page import OrdersPage
-from ui.pages.suppliers_page import SuppliersPage
-from ui.pages.users_page import UsersPage
 
 
 class MainWindow(QMainWindow):
@@ -37,6 +32,10 @@ class MainWindow(QMainWindow):
         self.app_config = load_app_config()
         self.page_titles: dict[str, str] = {}
         self.nav_buttons: dict[str, QPushButton] = {}
+        self.page_factories: dict[str, Callable[[], QWidget]] = {}
+        self.page_containers: dict[str, QWidget] = {}
+        self.loaded_pages: set[str] = set()
+        self.current_page_key = ""
         self._init_ui()
         self._switch_page("dashboard")
 
@@ -127,32 +126,58 @@ class MainWindow(QMainWindow):
         self.stack.setContentsMargins(18, 18, 18, 18)
         layout.addWidget(self.stack, 1)
 
-        self._add_page("dashboard", "总览仪表盘", DashboardPage())
-        self._add_page("orders", "订单管理", OrdersPage(self.user_session))
-        self._add_page(
+        self._register_page(
+            "dashboard",
+            "总览仪表盘",
+            self._create_dashboard_page,
+        )
+        self._register_page("orders", "订单管理", self._create_orders_page)
+        self._register_page(
             "inventory",
             "库存调度",
-            InventoryPage(self.user_session),
+            self._create_inventory_page,
         )
-        self._add_page(
+        self._register_page(
             "customers",
             "客户管理",
-            CustomersPage(self.user_session),
+            self._create_customers_page,
         )
-        self._add_page("suppliers", "供应商分析", SuppliersPage())
-        self._add_page("users", "用户权限", UsersPage(self.user_session))
-        self._add_page("logs", "审计日志", LogsPage(self.user_session))
+        self._register_page("suppliers", "供应商分析", self._create_suppliers_page)
+        if self.user_session.is_manager:
+            self._register_page("users", "用户权限", self._create_users_page)
+        self._register_page("logs", "审计日志", self._create_logs_page)
         return workspace
 
-    def _add_page(
+    def _register_page(
         self,
         page_key: str,
         title: str,
-        widget: QWidget,
+        factory: Callable[[], QWidget],
     ) -> None:
-        """添加业务页面。"""
+        """注册业务页面，进入时再懒加载真实内容。"""
         self.page_titles[page_key] = title
-        self.stack.addWidget(widget)
+        self.page_factories[page_key] = factory
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(18, 18, 18, 18)
+
+        placeholder = QFrame()
+        placeholder.setObjectName("content_panel")
+        placeholder.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        placeholder_layout = QVBoxLayout(placeholder)
+        placeholder_layout.setContentsMargins(22, 20, 22, 20)
+        label = QLabel("正在准备页面数据...")
+        label.setObjectName("meta_label")
+        label.setAlignment(Qt.AlignmentFlag.AlignTop)
+        placeholder_layout.addWidget(label)
+        placeholder_layout.addStretch(1)
+        container_layout.addWidget(placeholder, 1)
+
+        self.page_containers[page_key] = container
+        self.stack.addWidget(container)
 
     def _build_top_bar(self) -> QFrame:
         """构建顶部工具栏。"""
@@ -206,6 +231,72 @@ class MainWindow(QMainWindow):
         index = list(self.page_titles.keys()).index(page_key)
         self.stack.setCurrentIndex(index)
         self.page_title.setText(self.page_titles[page_key])
+        self.current_page_key = page_key
         button = self.nav_buttons.get(page_key)
         if button is not None:
             button.setChecked(True)
+        if page_key not in self.loaded_pages:
+            QTimer.singleShot(
+                0,
+                lambda key=page_key: self._ensure_page_loaded(key),
+            )
+
+    def _ensure_page_loaded(self, page_key: str) -> None:
+        """按需创建页面内容。"""
+        if page_key in self.loaded_pages:
+            return
+
+        container = self.page_containers[page_key]
+        layout = container.layout()
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        page = self.page_factories[page_key]()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(page)
+        self.loaded_pages.add(page_key)
+
+    def _create_dashboard_page(self) -> QWidget:
+        """创建总览页面。"""
+        from ui.pages.dashboard_page import DashboardPage
+
+        return DashboardPage()
+
+    def _create_orders_page(self) -> QWidget:
+        """创建订单页面。"""
+        from ui.pages.orders_page import OrdersPage
+
+        return OrdersPage(self.user_session)
+
+    def _create_inventory_page(self) -> QWidget:
+        """创建库存页面。"""
+        from ui.pages.inventory_page import InventoryPage
+
+        return InventoryPage(self.user_session)
+
+    def _create_customers_page(self) -> QWidget:
+        """创建客户页面。"""
+        from ui.pages.customers_page import CustomersPage
+
+        return CustomersPage(self.user_session)
+
+    def _create_suppliers_page(self) -> QWidget:
+        """创建供应商页面。"""
+        from ui.pages.suppliers_page import SuppliersPage
+
+        return SuppliersPage()
+
+    def _create_users_page(self) -> QWidget:
+        """创建用户页面。"""
+        from ui.pages.users_page import UsersPage
+
+        return UsersPage(self.user_session)
+
+    def _create_logs_page(self) -> QWidget:
+        """创建日志页面。"""
+        from ui.pages.logs_page import LogsPage
+
+        return LogsPage(self.user_session)
