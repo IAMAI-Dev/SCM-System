@@ -7,6 +7,21 @@ from dataclasses import dataclass
 from dao import auth_dao
 
 
+MODULE_DEPARTMENTS = {
+    "orders": "sales",
+    "inventory": "procurement",
+    "suppliers": "procurement",
+    "customers": "customer",
+}
+
+DEPARTMENT_LABELS = {
+    "admin": "总管理",
+    "procurement": "采购部",
+    "sales": "销售部",
+    "customer": "客户管理部",
+}
+
+
 @dataclass(frozen=True)
 class UserSession:
     """当前登录用户会话。"""
@@ -22,12 +37,22 @@ class UserSession:
     can_delete: bool
 
     @property
+    def is_admin(self) -> bool:
+        """判断是否为总管理员。"""
+        return self.role == "admin"
+
+    @property
     def is_manager(self) -> bool:
-        """判断是否为经理角色。"""
-        return self.role == "manager"
+        """判断是否为经理或总管理员。"""
+        return self.role in {"admin", "manager"}
+
+    @property
+    def department_label(self) -> str:
+        """返回部门中文名称。"""
+        return DEPARTMENT_LABELS.get(self.department, self.department)
 
     def has_permission(self, action: str) -> bool:
-        """判断用户是否具备指定动作权限。"""
+        """判断用户是否具备全局动作权限。"""
         permission_map = {
             "view": self.can_view,
             "insert": self.can_insert,
@@ -35,6 +60,49 @@ class UserSession:
             "delete": self.can_delete,
         }
         return permission_map.get(action, False)
+
+    def can_access_module(self, module_key: str) -> bool:
+        """判断用户是否可以进入指定模块。"""
+        if module_key in {"dashboard"}:
+            return True
+        if self.is_admin:
+            return True
+        if module_key in {"users", "logs"}:
+            return self.role == "manager"
+
+        module_department = MODULE_DEPARTMENTS.get(module_key)
+        if module_department is None:
+            return False
+        if self.role == "manager":
+            return True
+        return self.department == module_department
+
+    def can_operate_module(self, module_key: str, action: str) -> bool:
+        """判断用户是否能在模块内执行指定动作。"""
+        if action == "view":
+            return self.can_access_module(module_key) and self.can_view
+        if self.is_admin:
+            return self.has_permission(action)
+
+        module_department = MODULE_DEPARTMENTS.get(module_key)
+        if module_department != self.department:
+            return False
+        if self.role == "manager":
+            return self.has_permission(action)
+        if self.role == "staff":
+            return action in {"insert"} and self.has_permission(action)
+        return False
+
+    def can_manage_user(self, target: dict) -> bool:
+        """判断是否可分配目标用户权限。"""
+        if self.is_admin:
+            return True
+        if self.role != "manager":
+            return False
+        return (
+            target.get("department") == self.department
+            and target.get("role") == "staff"
+        )
 
 
 class AuthService:

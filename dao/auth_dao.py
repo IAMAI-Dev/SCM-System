@@ -28,7 +28,10 @@ def find_user_by_credentials(username: str, password: str) -> dict | None:
         return db_cursor.fetchone()
 
 
-def list_users() -> list[dict]:
+def list_users(
+    department: str | None = None,
+    role: str | None = None,
+) -> list[dict]:
     """查询系统用户列表。"""
     sql = """
         SELECT
@@ -44,11 +47,41 @@ def list_users() -> list[dict]:
             is_active,
             created_at
         FROM scm_users
-        ORDER BY user_id ASC
+        WHERE is_active = 1
+    """
+    params = []
+    if department is not None:
+        sql += " AND department = %s"
+        params.append(department)
+    if role is not None:
+        sql += " AND role = %s"
+        params.append(role)
+    sql += " ORDER BY department ASC, role ASC, user_id ASC"
+    with cursor() as db_cursor:
+        db_cursor.execute(sql, tuple(params))
+        return db_cursor.fetchall()
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    """按 ID 查询用户。"""
+    sql = """
+        SELECT
+            user_id,
+            username,
+            display_name,
+            department,
+            role,
+            can_view,
+            can_insert,
+            can_update,
+            can_delete,
+            is_active
+        FROM scm_users
+        WHERE user_id = %s AND is_active = 1
     """
     with cursor() as db_cursor:
-        db_cursor.execute(sql)
-        return db_cursor.fetchall()
+        db_cursor.execute(sql, (user_id,))
+        return db_cursor.fetchone()
 
 
 def update_permissions(

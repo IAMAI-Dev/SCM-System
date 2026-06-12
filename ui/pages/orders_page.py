@@ -27,6 +27,7 @@ class OrdersPage(QWidget):
 
     def __init__(self, user_session: UserSession, parent=None) -> None:
         super().__init__(parent)
+        self.user_session = user_session
         self.service = OrderService(user_session)
         self.model = DictTableModel(
             [
@@ -60,6 +61,12 @@ class OrdersPage(QWidget):
         create_button = QPushButton("模拟下单")
         create_button.setObjectName("primary_button")
         create_button.clicked.connect(self.create_order)
+        status_button.setEnabled(
+            self.user_session.can_operate_module("orders", "update")
+        )
+        create_button.setEnabled(
+            self.user_session.can_operate_module("orders", "insert")
+        )
 
         toolbar.addWidget(self.search_edit)
         toolbar.addWidget(refresh_button)

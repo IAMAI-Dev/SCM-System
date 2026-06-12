@@ -20,12 +20,17 @@ class SupplierKpi:
 class SupplierService:
     """供应商服务。"""
 
+    def __init__(self, user_session=None) -> None:
+        self.user_session = user_session
+
     def list_suppliers(self) -> list[dict]:
         """查询供应商表现。"""
+        self._require_view()
         return supplier_dao.list_suppliers()
 
     def load_analysis(self) -> dict:
         """加载供应商分析页面数据。"""
+        self._require_view()
         suppliers = supplier_dao.list_suppliers(limit=80)
         summary = supplier_dao.get_supplier_summary()
         countries = supplier_dao.get_country_distribution()
@@ -135,3 +140,12 @@ class SupplierService:
         if amount >= 10000:
             return f"¥{amount / 10000:.1f}万"
         return f"¥{amount:,.0f}"
+
+    def _require_view(self) -> None:
+        """检查采购模块查询权限。"""
+        if self.user_session is None:
+            return
+        if not self.user_session.can_operate_module("suppliers", "view"):
+            from service.order_service import PermissionError
+
+            raise PermissionError("当前用户没有供应商模块查询权限。")

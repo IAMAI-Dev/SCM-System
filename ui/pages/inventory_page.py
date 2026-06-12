@@ -26,6 +26,7 @@ class InventoryPage(QWidget):
 
     def __init__(self, user_session: UserSession, parent=None) -> None:
         super().__init__(parent)
+        self.user_session = user_session
         self.service = InventoryService(user_session)
         self.model = DictTableModel(
             [
@@ -56,6 +57,9 @@ class InventoryPage(QWidget):
         replenish_button = QPushButton("补货")
         replenish_button.setObjectName("primary_button")
         replenish_button.clicked.connect(self.replenish)
+        replenish_button.setEnabled(
+            self.user_session.can_operate_module("inventory", "update")
+        )
         abc_button = QPushButton("ABC 分类")
         abc_button.clicked.connect(self.show_abc)
         toolbar.addWidget(self.low_only_check)

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from service.auth_service import UserSession
 from service.supplier_service import SupplierKpi, SupplierService
 from ui.analytics_widgets import ChartCanvas, FadeFrame, chart_card
 
@@ -26,9 +27,13 @@ from ui.analytics_widgets import ChartCanvas, FadeFrame, chart_card
 class SuppliersPage(QWidget):
     """供应商分析页面。"""
 
-    def __init__(self, parent=None) -> None:
+    def __init__(
+        self,
+        user_session: UserSession,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
-        self.service = SupplierService()
+        self.service = SupplierService(user_session)
         self.kpi_labels: list[tuple[QLabel, QLabel, QLabel]] = []
         self._init_ui()
         self.refresh()

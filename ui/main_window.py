@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
             ("logs", "审计日志"),
         ]
         for page_key, title in nav_items:
-            if page_key == "users" and not self.user_session.is_manager:
+            if not self.user_session.can_access_module(page_key):
                 continue
             button = QPushButton(title)
             button.setObjectName("nav_button")
@@ -104,7 +104,7 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         user_label = QLabel(
             f"{self.user_session.display_name}\n"
-            f"{self.user_session.department} / {self.user_session.role}"
+            f"{self.user_session.department_label} / {self.user_session.role}"
         )
         user_label.setObjectName("sidebar_caption")
         layout.addWidget(user_label)
@@ -131,21 +131,30 @@ class MainWindow(QMainWindow):
             "总览仪表盘",
             self._create_dashboard_page,
         )
-        self._register_page("orders", "订单管理", self._create_orders_page)
-        self._register_page(
-            "inventory",
-            "库存调度",
-            self._create_inventory_page,
-        )
-        self._register_page(
-            "customers",
-            "客户管理",
-            self._create_customers_page,
-        )
-        self._register_page("suppliers", "供应商分析", self._create_suppliers_page)
-        if self.user_session.is_manager:
+        if self.user_session.can_access_module("orders"):
+            self._register_page("orders", "订单管理", self._create_orders_page)
+        if self.user_session.can_access_module("inventory"):
+            self._register_page(
+                "inventory",
+                "库存调度",
+                self._create_inventory_page,
+            )
+        if self.user_session.can_access_module("customers"):
+            self._register_page(
+                "customers",
+                "客户管理",
+                self._create_customers_page,
+            )
+        if self.user_session.can_access_module("suppliers"):
+            self._register_page(
+                "suppliers",
+                "供应商分析",
+                self._create_suppliers_page,
+            )
+        if self.user_session.can_access_module("users"):
             self._register_page("users", "用户权限", self._create_users_page)
-        self._register_page("logs", "审计日志", self._create_logs_page)
+        if self.user_session.can_access_module("logs"):
+            self._register_page("logs", "审计日志", self._create_logs_page)
         return workspace
 
     def _register_page(
@@ -205,26 +214,6 @@ class MainWindow(QMainWindow):
         meta.setObjectName("meta_label")
         layout.addWidget(meta)
         return top_bar
-
-    def _add_placeholder_page(self, page_key: str, title: str) -> None:
-        """添加占位页面。"""
-        panel = QFrame()
-        panel.setObjectName("content_panel")
-        panel.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Expanding,
-        )
-
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(22, 20, 22, 20)
-        label = QLabel(f"{title}模块将在后续阶段接入业务数据。")
-        label.setAlignment(Qt.AlignmentFlag.AlignTop)
-        label.setObjectName("meta_label")
-        layout.addWidget(label)
-        layout.addStretch(1)
-
-        self.page_titles[page_key] = title
-        self.stack.addWidget(panel)
 
     def _switch_page(self, page_key: str) -> None:
         """切换当前页面。"""
@@ -287,7 +276,7 @@ class MainWindow(QMainWindow):
         """创建供应商页面。"""
         from ui.pages.suppliers_page import SuppliersPage
 
-        return SuppliersPage()
+        return SuppliersPage(self.user_session)
 
     def _create_users_page(self) -> QWidget:
         """创建用户页面。"""

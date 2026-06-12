@@ -15,6 +15,7 @@ class InventoryService:
 
     def list_inventory(self, low_only: bool = False) -> list[dict]:
         """查询库存。"""
+        self._require("view")
         return inventory_dao.list_inventory(low_only=low_only)
 
     def replenish(
@@ -24,8 +25,7 @@ class InventoryService:
         quantity: int,
     ) -> None:
         """执行补货。"""
-        if not self.user_session.has_permission("update"):
-            raise PermissionError("当前用户没有补货权限。")
+        self._require("update")
         inventory_dao.replenish(part_key, supplier_key, quantity)
         auth_dao.log_action(
             self.user_session.username,
@@ -36,6 +36,7 @@ class InventoryService:
 
     def classify_abc(self) -> dict[str, int]:
         """执行 ABC 库存分类。"""
+        self._require("view")
         rows = inventory_dao.list_stock_values()
         total_value = sum(float(row["stock_value"] or 0) for row in rows)
         if total_value <= 0:
@@ -53,3 +54,8 @@ class InventoryService:
             else:
                 result["C"] += 1
         return result
+
+    def _require(self, action: str) -> None:
+        """检查采购模块权限。"""
+        if not self.user_session.can_operate_module("inventory", action):
+            raise PermissionError("当前用户没有库存模块操作权限。")

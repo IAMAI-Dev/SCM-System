@@ -15,6 +15,7 @@ class CustomerService:
 
     def list_customers(self, search_key: str = "") -> list[dict]:
         """查询客户。"""
+        self._require("view")
         return customer_dao.list_customers(search_key.strip())
 
     def create_customer(self, data: dict) -> int:
@@ -52,6 +53,6 @@ class CustomerService:
         )
 
     def _require(self, action: str) -> None:
-        """检查权限。"""
-        if not self.user_session.has_permission(action):
+        """检查客户管理模块权限。"""
+        if not self.user_session.can_operate_module("customers", action):
             raise PermissionError("当前用户没有客户模块操作权限。")

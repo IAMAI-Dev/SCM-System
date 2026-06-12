@@ -89,6 +89,11 @@ class UsersPage(QWidget):
         for key, check in checks.items():
             check.setChecked(bool(row[key]))
             layout.addWidget(check)
+        if row.get("role") == "staff":
+            checks["can_update"].setChecked(False)
+            checks["can_update"].setEnabled(False)
+            checks["can_delete"].setChecked(False)
+            checks["can_delete"].setEnabled(False)
         ok_button = QPushButton("保存")
         ok_button.setObjectName("primary_button")
         ok_button.clicked.connect(dialog.accept)

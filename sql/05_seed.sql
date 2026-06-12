@@ -1,5 +1,17 @@
 -- 供应链管理系统 · 演示用户种子数据
 
+UPDATE scm_users
+SET is_active = 0
+WHERE username NOT IN (
+    'admin',
+    'David',
+    'Tom',
+    'Jerry',
+    'Marry',
+    'Jack',
+    'Mike'
+);
+
 INSERT INTO scm_users (
     username,
     password_hash,
@@ -9,7 +21,8 @@ INSERT INTO scm_users (
     can_view,
     can_insert,
     can_update,
-    can_delete
+    can_delete,
+    is_active
 )
 VALUES
 (
@@ -17,46 +30,87 @@ VALUES
     SHA2('123456', 256),
     '系统管理员',
     'admin',
-    'manager',
+    'admin',
+    1,
     1,
     1,
     1,
     1
 ),
 (
-    'proc_mgr',
+    'David',
     SHA2('123456', 256),
-    '采购经理',
+    'David',
     'procurement',
     'manager',
     1,
     1,
     1,
-    0
+    1,
+    1
 ),
 (
-    'proc_staff',
+    'Tom',
     SHA2('123456', 256),
-    '采购专员',
-    'procurement',
-    'staff',
-    1,
-    1,
-    0,
-    0
-),
-(
-    'sales_mgr',
-    SHA2('123456', 256),
-    '销售经理',
+    'Tom',
     'sales',
     'manager',
     1,
     1,
     1,
-    0
+    1,
+    1
+),
+(
+    'Jerry',
+    SHA2('123456', 256),
+    'Jerry',
+    'customer',
+    'manager',
+    1,
+    1,
+    1,
+    1,
+    1
+),
+(
+    'Marry',
+    SHA2('123456', 256),
+    'Marry',
+    'procurement',
+    'staff',
+    1,
+    1,
+    0,
+    0,
+    1
+),
+(
+    'Jack',
+    SHA2('123456', 256),
+    'Jack',
+    'sales',
+    'staff',
+    1,
+    1,
+    0,
+    0,
+    1
+),
+(
+    'Mike',
+    SHA2('123456', 256),
+    'Mike',
+    'customer',
+    'staff',
+    1,
+    1,
+    0,
+    0,
+    1
 )
 ON DUPLICATE KEY UPDATE
+    password_hash = VALUES(password_hash),
     display_name = VALUES(display_name),
     department = VALUES(department),
     role = VALUES(role),

@@ -16,17 +16,33 @@ class AdminService:
     def list_users(self) -> list[dict]:
         """查询用户。"""
         self._require_manager()
-        return auth_dao.list_users()
+        if self.user_session.is_admin:
+            return auth_dao.list_users()
+        return auth_dao.list_users(
+            department=self.user_session.department,
+            role="staff",
+        )
 
     def update_permissions(self, user_id: int, permissions: dict) -> None:
         """更新用户权限。"""
         self._require_manager()
+        target = auth_dao.get_user_by_id(user_id)
+        if target is None:
+            raise PermissionError("目标用户不存在或已停用。")
+        if not self.user_session.can_manage_user(target):
+            raise PermissionError("只能分配本部门职员的权限。")
+
+        normalized_permissions = permissions.copy()
+        if target.get("role") == "staff":
+            normalized_permissions["can_update"] = False
+            normalized_permissions["can_delete"] = False
+
         auth_dao.update_permissions(
             user_id,
-            permissions["can_view"],
-            permissions["can_insert"],
-            permissions["can_update"],
-            permissions["can_delete"],
+            normalized_permissions["can_view"],
+            normalized_permissions["can_insert"],
+            normalized_permissions["can_update"],
+            normalized_permissions["can_delete"],
         )
         auth_dao.log_action(
             self.user_session.username,
@@ -37,9 +53,11 @@ class AdminService:
 
     def list_logs(self) -> list[dict]:
         """查询审计日志。"""
+        if not self.user_session.is_manager:
+            raise PermissionError("只有经理或管理员可以查看审计日志。")
         return log_dao.list_logs()
 
     def _require_manager(self) -> None:
         """检查经理权限。"""
         if not self.user_session.is_manager:
-            raise PermissionError("只有经理角色可以执行该操作。")
+            raise PermissionError("只有经理或管理员可以执行该操作。")

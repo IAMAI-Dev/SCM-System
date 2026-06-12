@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import compileall
-import re
+import ast
 from pathlib import Path
 
 
@@ -33,15 +32,15 @@ def _iter_project_files() -> list[Path]:
 
 
 def check_compile() -> None:
-    """检查 Python 语法。"""
-    ok = compileall.compile_dir(
-        str(PROJECT_ROOT),
-        quiet=1,
-        rx=re.compile(r"(\.venv|\.git|\.idea|__pycache__)"),
-        maxlevels=20,
-    )
-    if not ok:
-        raise RuntimeError("Python 编译检查失败。")
+    """检查 Python 语法，不写入 pyc 缓存。"""
+    for path in _iter_project_files():
+        if path.suffix.lower() != ".py":
+            continue
+        source = path.read_text(encoding="utf-8", errors="ignore")
+        try:
+            ast.parse(source, filename=str(path))
+        except SyntaxError as exc:
+            raise RuntimeError(f"Python 语法检查失败：{path}") from exc
 
 
 def check_forbidden_snippets() -> None:

@@ -18,10 +18,12 @@ class OrderService:
 
     def list_orders(self, search_key: str = "") -> list[dict]:
         """查询订单列表。"""
+        self._require("view")
         return order_dao.list_orders(search_key=search_key.strip())
 
     def list_details(self, order_key: int) -> list[dict]:
         """查询订单明细。"""
+        self._require("view")
         return order_dao.list_order_details(order_key)
 
     def update_status(self, order_key: int, status: str) -> None:
@@ -48,6 +50,6 @@ class OrderService:
         return new_order_key
 
     def _require(self, action: str) -> None:
-        """检查权限。"""
-        if not self.user_session.has_permission(action):
-            raise PermissionError("当前用户没有执行该操作的权限。")
+        """检查销售模块权限。"""
+        if not self.user_session.can_operate_module("orders", action):
+            raise PermissionError("当前用户没有订单模块操作权限。")

@@ -25,6 +25,7 @@ class CustomersPage(QWidget):
 
     def __init__(self, user_session: UserSession, parent=None) -> None:
         super().__init__(parent)
+        self.user_session = user_session
         self.service = CustomerService(user_session)
         self.model = DictTableModel(
             [
@@ -54,11 +55,24 @@ class CustomersPage(QWidget):
             ("编辑", self.update_customer, ""),
             ("删除", self.delete_customer, ""),
         ]
+        action_permissions = {
+            "新增": "insert",
+            "编辑": "update",
+            "删除": "delete",
+        }
         toolbar.addWidget(self.search_edit)
         for text, handler, object_name in buttons:
             button = QPushButton(text)
             if object_name:
                 button.setObjectName(object_name)
+            action = action_permissions.get(text)
+            if action:
+                button.setEnabled(
+                    self.user_session.can_operate_module(
+                        "customers",
+                        action,
+                    )
+                )
             button.clicked.connect(handler)
             toolbar.addWidget(button)
         layout.addLayout(toolbar)
