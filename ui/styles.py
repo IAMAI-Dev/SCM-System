@@ -9,17 +9,26 @@ QWidget {
 }
 
 QMainWindow {
-    background-color: #f3f1ec;
+    background-color: transparent;
 }
 
 QWidget#app_root {
     background-color: #f3f1ec;
     border: 1px solid #bdb7ad;
+    border-radius: 10px;
+}
+
+QWidget#workspace {
+    background-color: #f3f1ec;
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
 }
 
 QFrame#sidebar {
     background-color: #1f2428;
     border: none;
+    border-top-left-radius: 10px;
+    border-bottom-left-radius: 10px;
 }
 
 QLabel#brand_title {
@@ -60,6 +69,12 @@ QPushButton#nav_button:checked {
 QFrame#top_bar {
     background-color: #f8f5ee;
     border-bottom: 1px solid #d7d2c8;
+    border-top-right-radius: 10px;
+}
+
+QStackedWidget#page_stack {
+    background-color: #f3f1ec;
+    border-bottom-right-radius: 10px;
 }
 
 QLabel#page_title {

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
+from ctypes import wintypes
 
-from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QFrame,
     QHBoxLayout,
@@ -26,6 +29,8 @@ from service.auth_service import UserSession
 class MainWindow(QMainWindow):
     """供应链管理系统主窗口。"""
 
+    RESIZE_MARGIN = 10
+
     def __init__(self, user_session: UserSession) -> None:
         super().__init__()
         self.user_session = user_session
@@ -36,7 +41,11 @@ class MainWindow(QMainWindow):
         self.page_containers: dict[str, QWidget] = {}
         self.loaded_pages: set[str] = set()
         self.current_page_key = ""
+        self._resize_cursor_widget: QWidget | None = None
         self._init_ui()
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
         self._switch_page("dashboard")
 
     def _init_ui(self) -> None:
@@ -45,6 +54,7 @@ class MainWindow(QMainWindow):
         self.setWindowFlags(
             self.windowFlags() | Qt.WindowType.FramelessWindowHint
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.resize(1320, 840)
         self.setMinimumSize(980, 620)
 
@@ -58,6 +68,7 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(self._build_workspace(), 1)
 
         self.setCentralWidget(central)
+        self._enable_resize_tracking(central)
 
     def _build_sidebar(self) -> QFrame:
         """构建左侧导航栏。"""
@@ -118,6 +129,7 @@ class MainWindow(QMainWindow):
     def _build_workspace(self) -> QWidget:
         """构建右侧工作区。"""
         workspace = QWidget()
+        workspace.setObjectName("workspace")
         layout = QVBoxLayout(workspace)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -130,6 +142,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(top_bar)
 
         self.stack = QStackedWidget()
+        self.stack.setObjectName("page_stack")
         self.stack.setContentsMargins(18, 18, 18, 18)
         layout.addWidget(self.stack, 1)
 
@@ -257,6 +270,8 @@ class MainWindow(QMainWindow):
         """从自定义顶部栏拖动窗口。"""
         if event.button() != Qt.MouseButton.LeftButton:
             return
+        if self._resize_edges_at(self._event_global_pos(event)):
+            return
         handle = self.windowHandle()
         if handle is not None:
             handle.startSystemMove()
@@ -281,11 +296,159 @@ class MainWindow(QMainWindow):
         if hasattr(self, "maximize_button"):
             self.maximize_button.setText("▢" if self.isMaximized() else "□")
 
+    def eventFilter(self, watched, event) -> bool:
+        """在所有子控件边缘提供无边框窗口缩放。"""
+        if isinstance(watched, QWidget) and watched.window() is self:
+            if event.type() == QEvent.Type.MouseMove:
+                self._update_resize_cursor(watched, event)
+            elif event.type() == QEvent.Type.MouseButtonPress:
+                if self._start_window_resize(event):
+                    return True
+            elif event.type() == QEvent.Type.Leave:
+                if watched is self._resize_cursor_widget:
+                    self._clear_resize_cursor()
+        return super().eventFilter(watched, event)
+
     def changeEvent(self, event) -> None:
         """同步窗口状态变化。"""
         super().changeEvent(event)
         if event.type() == QEvent.Type.WindowStateChange:
             self._sync_window_buttons()
+
+    def nativeEvent(self, event_type, message):
+        """让无边框窗口在 Windows 下保留原生边缘缩放。"""
+        if sys.platform != "win32" or self.isMaximized():
+            return super().nativeEvent(event_type, message)
+
+        msg = wintypes.MSG.from_address(int(message))
+        if msg.message != 0x0084:  # WM_NCHITTEST
+            return super().nativeEvent(event_type, message)
+
+        global_pos = QPoint(
+            _signed_low_word(msg.lParam),
+            _signed_high_word(msg.lParam),
+        )
+        local_pos = self.mapFromGlobal(global_pos)
+        if not self.rect().contains(local_pos):
+            return super().nativeEvent(event_type, message)
+
+        margin = self.RESIZE_MARGIN
+        left = local_pos.x() <= margin
+        right = local_pos.x() >= self.width() - margin
+        top = local_pos.y() <= margin
+        bottom = local_pos.y() >= self.height() - margin
+
+        if top and left:
+            return True, 13  # HTTOPLEFT
+        if top and right:
+            return True, 14  # HTTOPRIGHT
+        if bottom and left:
+            return True, 16  # HTBOTTOMLEFT
+        if bottom and right:
+            return True, 17  # HTBOTTOMRIGHT
+        if left:
+            return True, 10  # HTLEFT
+        if right:
+            return True, 11  # HTRIGHT
+        if top:
+            return True, 12  # HTTOP
+        if bottom:
+            return True, 15  # HTBOTTOM
+        return super().nativeEvent(event_type, message)
+
+    def _enable_resize_tracking(self, widget: QWidget) -> None:
+        """让边缘上的子控件也能产生鼠标移动事件。"""
+        widget.setMouseTracking(True)
+        for child in widget.findChildren(QWidget):
+            child.setMouseTracking(True)
+
+    def _start_window_resize(self, event) -> bool:
+        """从窗口边缘启动系统缩放。"""
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+
+        edges = self._resize_edges_at(self._event_global_pos(event))
+        if not edges:
+            return False
+
+        handle = self.windowHandle()
+        if handle is None:
+            return False
+
+        started = handle.startSystemResize(edges)
+        if started:
+            event.accept()
+        return started
+
+    def _update_resize_cursor(self, watched: QWidget, event) -> None:
+        """鼠标靠近窗口边缘时显示缩放光标。"""
+        cursor_shape = self._resize_cursor_for_edges(
+            self._resize_edges_at(self._event_global_pos(event))
+        )
+        if cursor_shape is None:
+            self._clear_resize_cursor()
+            return
+
+        if self._resize_cursor_widget is not watched:
+            self._clear_resize_cursor()
+            self._resize_cursor_widget = watched
+        watched.setCursor(cursor_shape)
+
+    def _clear_resize_cursor(self) -> None:
+        """清除边缘缩放光标。"""
+        if self._resize_cursor_widget is not None:
+            self._resize_cursor_widget.unsetCursor()
+            self._resize_cursor_widget = None
+
+    def _resize_edges_at(self, global_pos: QPoint | None):
+        """返回指定全局坐标命中的窗口缩放边缘。"""
+        if global_pos is None or self.isMaximized() or self.isFullScreen():
+            return Qt.Edges()
+
+        local_pos = self.mapFromGlobal(global_pos)
+        if not self.rect().contains(local_pos):
+            return Qt.Edges()
+
+        margin = self.RESIZE_MARGIN
+        edges = Qt.Edges()
+        if local_pos.x() <= margin:
+            edges |= Qt.Edge.LeftEdge
+        elif local_pos.x() >= self.width() - margin:
+            edges |= Qt.Edge.RightEdge
+
+        if local_pos.y() <= margin:
+            edges |= Qt.Edge.TopEdge
+        elif local_pos.y() >= self.height() - margin:
+            edges |= Qt.Edge.BottomEdge
+        return edges
+
+    def _resize_cursor_for_edges(self, edges):
+        """根据缩放边缘返回鼠标光标。"""
+        if not edges:
+            return None
+
+        left = bool(edges & Qt.Edge.LeftEdge)
+        right = bool(edges & Qt.Edge.RightEdge)
+        top = bool(edges & Qt.Edge.TopEdge)
+        bottom = bool(edges & Qt.Edge.BottomEdge)
+
+        if (top and left) or (bottom and right):
+            return Qt.CursorShape.SizeFDiagCursor
+        if (top and right) or (bottom and left):
+            return Qt.CursorShape.SizeBDiagCursor
+        if left or right:
+            return Qt.CursorShape.SizeHorCursor
+        if top or bottom:
+            return Qt.CursorShape.SizeVerCursor
+        return None
+
+    def _event_global_pos(self, event) -> QPoint | None:
+        """兼容 Qt6 鼠标事件全局坐标。"""
+        if hasattr(event, "globalPosition"):
+            return event.globalPosition().toPoint()
+        if hasattr(event, "globalPos"):
+            return event.globalPos()
+        return None
 
     def _switch_page(self, page_key: str) -> None:
         """切换当前页面。"""
@@ -318,6 +481,7 @@ class MainWindow(QMainWindow):
         page = self.page_factories[page_key]()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(page)
+        self._enable_resize_tracking(page)
         self.loaded_pages.add(page_key)
 
     def _create_dashboard_page(self) -> QWidget:
@@ -361,3 +525,15 @@ class MainWindow(QMainWindow):
         from ui.pages.logs_page import LogsPage
 
         return LogsPage(self.user_session)
+
+
+def _signed_low_word(value: int) -> int:
+    """读取 Windows lParam 低位有符号坐标。"""
+    result = value & 0xFFFF
+    return result - 0x10000 if result & 0x8000 else result
+
+
+def _signed_high_word(value: int) -> int:
+    """读取 Windows lParam 高位有符号坐标。"""
+    result = (value >> 16) & 0xFFFF
+    return result - 0x10000 if result & 0x8000 else result
