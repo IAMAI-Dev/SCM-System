@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.db import transaction
 from dao import auth_dao, inventory_dao
 from service.auth_service import UserSession
 from service.order_service import PermissionError
@@ -26,13 +27,28 @@ class InventoryService:
     ) -> None:
         """执行补货。"""
         self._require("update")
-        inventory_dao.replenish(part_key, supplier_key, quantity)
-        auth_dao.log_action(
-            self.user_session.username,
-            "inventory",
-            "UPDATE",
-            f"零件 {part_key} 供应商 {supplier_key} 补货 {quantity}",
-        )
+        part_key = int(part_key)
+        supplier_key = int(supplier_key)
+        quantity = int(quantity)
+        if part_key <= 0 or supplier_key <= 0:
+            raise ValueError("零件ID和供应商ID必须大于 0。")
+        if quantity <= 0:
+            raise ValueError("补货数量必须大于 0。")
+
+        with transaction() as db_cursor:
+            inventory_dao.replenish(
+                part_key,
+                supplier_key,
+                quantity,
+                db_cursor=db_cursor,
+            )
+            auth_dao.log_action(
+                self.user_session.username,
+                "inventory",
+                "UPDATE",
+                f"零件 {part_key} 供应商 {supplier_key} 补货 {quantity}",
+                db_cursor=db_cursor,
+            )
 
     def classify_abc(self) -> dict[str, int]:
         """执行 ABC 库存分类。"""

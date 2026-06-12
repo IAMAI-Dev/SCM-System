@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -42,9 +42,14 @@ class MainWindow(QMainWindow):
     def _init_ui(self) -> None:
         """初始化主窗口布局。"""
         self.setWindowTitle("供应链管理系统")
+        self.setWindowFlags(
+            self.windowFlags() | Qt.WindowType.FramelessWindowHint
+        )
         self.resize(1320, 840)
+        self.setMinimumSize(980, 620)
 
         central = QWidget()
+        central.setObjectName("app_root")
         root_layout = QHBoxLayout(central)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
@@ -120,6 +125,8 @@ class MainWindow(QMainWindow):
         self.page_title = QLabel()
         self.page_title.setObjectName("page_title")
         top_bar = self._build_top_bar()
+        top_bar.mousePressEvent = self._start_window_move
+        top_bar.mouseDoubleClickEvent = self._toggle_maximized_from_event
         layout.addWidget(top_bar)
 
         self.stack = QStackedWidget()
@@ -199,6 +206,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(14)
 
         layout.addWidget(self.page_title)
+        self.page_title.mousePressEvent = self._start_window_move
 
         search = QLineEdit()
         search.setPlaceholderText("全局搜索订单、客户、零件或供应商")
@@ -212,8 +220,72 @@ class MainWindow(QMainWindow):
             "同步：本地"
         )
         meta.setObjectName("meta_label")
+        meta.mousePressEvent = self._start_window_move
         layout.addWidget(meta)
+        layout.addLayout(self._build_window_buttons())
         return top_bar
+
+    def _build_window_buttons(self) -> QHBoxLayout:
+        """构建嵌入式窗口控制按钮。"""
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(4)
+        button_layout.setContentsMargins(8, 0, 0, 0)
+
+        minimize_button = self._window_button("-", "最小化")
+        minimize_button.clicked.connect(self.showMinimized)
+        self.maximize_button = self._window_button("□", "最大化")
+        self.maximize_button.clicked.connect(self._toggle_maximized)
+        close_button = self._window_button("×", "关闭")
+        close_button.setObjectName("window_close_button")
+        close_button.clicked.connect(self.close)
+
+        button_layout.addWidget(minimize_button)
+        button_layout.addWidget(self.maximize_button)
+        button_layout.addWidget(close_button)
+        return button_layout
+
+    def _window_button(self, text: str, tooltip: str) -> QPushButton:
+        """创建窗口控制按钮。"""
+        button = QPushButton(text)
+        button.setObjectName("window_button")
+        button.setToolTip(tooltip)
+        button.setFixedSize(38, 30)
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        return button
+
+    def _start_window_move(self, event) -> None:
+        """从自定义顶部栏拖动窗口。"""
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        handle = self.windowHandle()
+        if handle is not None:
+            handle.startSystemMove()
+            event.accept()
+
+    def _toggle_maximized_from_event(self, event) -> None:
+        """双击自定义顶部栏切换最大化。"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._toggle_maximized()
+            event.accept()
+
+    def _toggle_maximized(self) -> None:
+        """切换窗口最大化状态。"""
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+        self._sync_window_buttons()
+
+    def _sync_window_buttons(self) -> None:
+        """同步窗口按钮展示。"""
+        if hasattr(self, "maximize_button"):
+            self.maximize_button.setText("▢" if self.isMaximized() else "□")
+
+    def changeEvent(self, event) -> None:
+        """同步窗口状态变化。"""
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange:
+            self._sync_window_buttons()
 
     def _switch_page(self, page_key: str) -> None:
         """切换当前页面。"""

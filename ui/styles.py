@@ -12,6 +12,11 @@ QMainWindow {
     background-color: #f3f1ec;
 }
 
+QWidget#app_root {
+    background-color: #f3f1ec;
+    border: 1px solid #bdb7ad;
+}
+
 QFrame#sidebar {
     background-color: #1f2428;
     border: none;
@@ -103,6 +108,27 @@ QPushButton#primary_button {
 
 QPushButton#primary_button:hover {
     background-color: #9d5c25;
+}
+
+QPushButton#window_button,
+QPushButton#window_close_button {
+    background-color: transparent;
+    border: none;
+    border-radius: 3px;
+    color: #5f5d58;
+    font-size: 11pt;
+    font-weight: 600;
+    padding: 0;
+}
+
+QPushButton#window_button:hover {
+    background-color: #e7dfd1;
+    color: #252525;
+}
+
+QPushButton#window_close_button:hover {
+    background-color: #b84536;
+    color: #fffdf8;
 }
 
 QFrame#content_panel,

@@ -67,14 +67,18 @@ def load_database_config() -> DatabaseConfig:
         ),
         database=os.getenv(
             "SCM_DB_NAME",
-                parser.get("database", "database", fallback="experiment2026"),
+            parser.get("database", "database", fallback="experiment2026"),
         ),
-        pool_name=parser.get(
-            "database",
-            "pool_name",
-            fallback="scm_pool",
+        pool_name=os.getenv(
+            "SCM_DB_POOL_NAME",
+            parser.get("database", "pool_name", fallback="scm_pool"),
         ),
-        pool_size=parser.getint("database", "pool_size", fallback=5),
+        pool_size=int(
+            os.getenv(
+                "SCM_DB_POOL_SIZE",
+                parser.get("database", "pool_size", fallback="5"),
+            )
+        ),
     )
 
 

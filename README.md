@@ -76,6 +76,8 @@ theme = industrial
 - `SCM_DB_USER`
 - `SCM_DB_PASSWORD`
 - `SCM_DB_NAME`
+- `SCM_DB_POOL_NAME`
+- `SCM_DB_POOL_SIZE`
 
 ## 四、启动程序
 

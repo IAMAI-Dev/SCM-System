@@ -90,6 +90,7 @@ def update_permissions(
     can_insert: bool,
     can_update: bool,
     can_delete: bool,
+    db_cursor=None,
 ) -> None:
     """更新用户权限。"""
     sql = """
@@ -100,8 +101,21 @@ def update_permissions(
             can_delete = %s
         WHERE user_id = %s
     """
-    with transaction() as db_cursor:
+    if db_cursor is not None:
         db_cursor.execute(
+            sql,
+            (
+                int(can_view),
+                int(can_insert),
+                int(can_update),
+                int(can_delete),
+                user_id,
+            ),
+        )
+        return
+
+    with transaction() as tx_cursor:
+        tx_cursor.execute(
             sql,
             (
                 int(can_view),
@@ -118,11 +132,16 @@ def log_action(
     module: str,
     action: str,
     details: str,
+    db_cursor=None,
 ) -> None:
     """写入操作审计日志。"""
     sql = """
         INSERT INTO scm_logs (username, module, action, details)
         VALUES (%s, %s, %s, %s)
     """
-    with transaction() as db_cursor:
+    if db_cursor is not None:
         db_cursor.execute(sql, (username, module, action, details))
+        return
+
+    with transaction() as tx_cursor:
+        tx_cursor.execute(sql, (username, module, action, details))

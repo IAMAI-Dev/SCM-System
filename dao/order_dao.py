@@ -52,138 +52,181 @@ def list_order_details(order_key: int) -> list[dict]:
         return db_cursor.fetchall()
 
 
-def update_order_status(order_key: int, status: str) -> None:
+def update_order_status(
+    order_key: int,
+    status: str,
+    db_cursor=None,
+) -> bool:
     """更新订单状态。"""
     sql = """
         UPDATE Orders
         SET Orderstatus = %s
         WHERE Orderkey = %s
     """
-    with transaction() as db_cursor:
-        db_cursor.execute(sql, (status, order_key))
+    if db_cursor is not None:
+        return _update_order_status(db_cursor, sql, order_key, status)
+
+    with transaction() as tx_cursor:
+        return _update_order_status(tx_cursor, sql, order_key, status)
 
 
-def create_order(cust_key: int, items: list[dict]) -> int:
+def _update_order_status(
+    db_cursor,
+    sql: str,
+    order_key: int,
+    status: str,
+) -> bool:
+    """锁定订单并更新状态，返回是否实际变更。"""
+    db_cursor.execute(
+        "SELECT Orderstatus FROM Orders WHERE Orderkey = %s FOR UPDATE",
+        (order_key,),
+    )
+    row = db_cursor.fetchone()
+    if row is None:
+        raise ValueError("订单不存在。")
+    if row["Orderstatus"] == status:
+        return False
+    db_cursor.execute(sql, (status, order_key))
+    return True
+
+
+def create_order(
+    cust_key: int,
+    items: list[dict],
+    db_cursor=None,
+) -> int:
     """使用事务创建订单并扣减库存。"""
-    with transaction() as db_cursor:
-        db_cursor.execute("SELECT COALESCE(MAX(Orderkey), 0) + 1 AS next_id "
-                          "FROM Orders")
-        new_order_key = db_cursor.fetchone()["next_id"]
-        total_price = 0.0
-        line_rows = []
+    if db_cursor is not None:
+        return _create_order(db_cursor, cust_key, items)
 
-        for index, item in enumerate(items, start=1):
-            part_key = int(item["part_key"])
-            supplier_key = int(item["supplier_key"])
-            quantity = int(item["quantity"])
+    with transaction() as tx_cursor:
+        return _create_order(tx_cursor, cust_key, items)
 
-            db_cursor.execute(
-                """
-                SELECT Availqty, Supplycost
-                FROM PartSupp
-                WHERE Partkey = %s AND Suppkey = %s
-                FOR UPDATE
-                """,
-                (part_key, supplier_key),
-            )
-            stock_row = db_cursor.fetchone()
-            if not stock_row:
-                raise ValueError("零件与供应商关系不存在。")
-            if int(stock_row["Availqty"]) < quantity:
-                raise ValueError("库存不足，订单已回滚。")
 
-            price = float(stock_row["Supplycost"]) * quantity * 1.5
-            total_price += price
-            line_rows.append(
-                (
-                    new_order_key,
-                    part_key,
-                    supplier_key,
-                    index,
-                    quantity,
-                    price,
-                    0.05,
-                    0.04,
-                    "N",
-                    "O",
-                )
-            )
+def _create_order(db_cursor, cust_key: int, items: list[dict]) -> int:
+    """执行订单创建 SQL。"""
+    if not items:
+        raise ValueError("订单明细不能为空。")
 
-            db_cursor.execute(
-                """
-                UPDATE PartSupp
-                SET Availqty = Availqty - %s
-                WHERE Partkey = %s AND Suppkey = %s
-                """,
-                (quantity, part_key, supplier_key),
-            )
+    db_cursor.execute(
+        "SELECT COALESCE(MAX(Orderkey), 0) + 1 AS next_id FROM Orders"
+    )
+    new_order_key = db_cursor.fetchone()["next_id"]
+    total_price = 0.0
+    line_rows = []
+
+    for index, item in enumerate(items, start=1):
+        part_key = int(item["part_key"])
+        supplier_key = int(item["supplier_key"])
+        quantity = int(item["quantity"])
 
         db_cursor.execute(
             """
-            INSERT INTO Orders (
-                Orderkey,
-                Custkey,
-                Orderstatus,
-                Totalprice,
-                Orderdate,
-                Orderpriority,
-                Clerk,
-                Shippriority,
-                Comment
-            )
-            VALUES (
-                %s,
-                %s,
-                'O',
-                %s,
-                CURRENT_DATE,
-                '1-URGENT',
-                'Clerk#SCM',
-                0,
-                'Created by SCM desktop'
-            )
+            SELECT Availqty, Supplycost
+            FROM PartSupp
+            WHERE Partkey = %s AND Suppkey = %s
+            FOR UPDATE
             """,
-            (new_order_key, cust_key, total_price),
+            (part_key, supplier_key),
         )
-        db_cursor.executemany(
+        stock_row = db_cursor.fetchone()
+        if not stock_row:
+            raise ValueError("零件与供应商关系不存在。")
+        if int(stock_row["Availqty"]) < quantity:
+            raise ValueError("库存不足，订单已回滚。")
+
+        price = float(stock_row["Supplycost"]) * quantity * 1.5
+        total_price += price
+        line_rows.append(
+            (
+                new_order_key,
+                part_key,
+                supplier_key,
+                index,
+                quantity,
+                price,
+                0.05,
+                0.04,
+                "N",
+                "O",
+            )
+        )
+
+        db_cursor.execute(
             """
-            INSERT INTO Lineitem (
-                Orderkey,
-                Partkey,
-                Suppkey,
-                Linenumber,
-                Quantity,
-                Extendedprice,
-                Discount,
-                Tax,
-                Returnflag,
-                Linestatus,
-                Shipdate,
-                Commitdate,
-                Receiptdate,
-                Shipinstruct,
-                Shipmode,
-                Comment
-            )
-            VALUES (
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                CURRENT_DATE,
-                CURRENT_DATE,
-                CURRENT_DATE,
-                'DELIVER IN PERSON',
-                'TRUCK',
-                'Created by SCM desktop'
-            )
+            UPDATE PartSupp
+            SET Availqty = Availqty - %s
+            WHERE Partkey = %s AND Suppkey = %s
             """,
-            line_rows,
+            (quantity, part_key, supplier_key),
         )
-        return new_order_key
+
+    db_cursor.execute(
+        """
+        INSERT INTO Orders (
+            Orderkey,
+            Custkey,
+            Orderstatus,
+            Totalprice,
+            Orderdate,
+            Orderpriority,
+            Clerk,
+            Shippriority,
+            Comment
+        )
+        VALUES (
+            %s,
+            %s,
+            'O',
+            %s,
+            CURRENT_DATE,
+            '1-URGENT',
+            'Clerk#SCM',
+            0,
+            'Created by SCM desktop'
+        )
+        """,
+        (new_order_key, cust_key, total_price),
+    )
+    db_cursor.executemany(
+        """
+        INSERT INTO Lineitem (
+            Orderkey,
+            Partkey,
+            Suppkey,
+            Linenumber,
+            Quantity,
+            Extendedprice,
+            Discount,
+            Tax,
+            Returnflag,
+            Linestatus,
+            Shipdate,
+            Commitdate,
+            Receiptdate,
+            Shipinstruct,
+            Shipmode,
+            Comment
+        )
+        VALUES (
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            CURRENT_DATE,
+            CURRENT_DATE,
+            CURRENT_DATE,
+            'DELIVER IN PERSON',
+            'TRUCK',
+            'Created by SCM desktop'
+        )
+        """,
+        line_rows,
+    )
+    return new_order_key

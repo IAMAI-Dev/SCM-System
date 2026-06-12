@@ -28,15 +28,32 @@ def list_inventory(low_only: bool = False, limit: int = 200) -> list[dict]:
         return db_cursor.fetchall()
 
 
-def replenish(part_key: int, supplier_key: int, quantity: int) -> None:
+def replenish(
+    part_key: int,
+    supplier_key: int,
+    quantity: int,
+    db_cursor=None,
+) -> None:
     """补充库存数量。"""
     sql = """
         UPDATE PartSupp
         SET Availqty = Availqty + %s
         WHERE Partkey = %s AND Suppkey = %s
     """
-    with transaction() as db_cursor:
-        db_cursor.execute(sql, (quantity, part_key, supplier_key))
+    params = (quantity, part_key, supplier_key)
+    if db_cursor is not None:
+        _execute_replenish(db_cursor, sql, params)
+        return
+
+    with transaction() as tx_cursor:
+        _execute_replenish(tx_cursor, sql, params)
+
+
+def _execute_replenish(db_cursor, sql: str, params: tuple) -> None:
+    """执行补货并检查库存关系。"""
+    db_cursor.execute(sql, params)
+    if db_cursor.rowcount == 0:
+        raise ValueError("零件与供应商库存关系不存在。")
 
 
 def list_stock_values() -> list[dict]:

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
-    QFormLayout,
+    QAbstractItemView,
     QHBoxLayout,
     QInputDialog,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -77,20 +78,42 @@ class CustomersPage(QWidget):
             toolbar.addWidget(button)
         layout.addLayout(toolbar)
 
+        self.status_label = QLabel("等待刷新")
+        self.status_label.setObjectName("meta_label")
+        layout.addWidget(self.status_label)
+
         self.table = QTableView()
         self.table.setAlternatingRowColors(True)
+        self.table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        self.table.setWordWrap(False)
         self.table.setModel(self.model)
+        self.table.verticalHeader().setDefaultSectionSize(36)
+        self.table.verticalHeader().setMinimumSectionSize(28)
         self.table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.table, 1)
 
     def refresh(self) -> None:
         """刷新客户列表。"""
+        self.status_label.setText("正在加载客户...")
+        self.table.setUpdatesEnabled(False)
         try:
-            self.model.set_rows(
-                self.service.list_customers(self.search_edit.text())
-            )
+            rows = self.service.list_customers(self.search_edit.text())
+            self.model.set_rows(rows)
+            self.status_label.setText(f"已加载 {len(rows)} 条客户记录。")
         except Exception as exc:
             QMessageBox.critical(self, "查询失败", str(exc))
+            self.status_label.setText("客户查询失败")
+            return
+        finally:
+            self.table.setUpdatesEnabled(True)
 
     def _selected_row(self) -> dict | None:
         """返回当前选中客户。"""

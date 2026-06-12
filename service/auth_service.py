@@ -53,6 +53,8 @@ class UserSession:
 
     def has_permission(self, action: str) -> bool:
         """判断用户是否具备全局动作权限。"""
+        if self.is_admin:
+            return True
         permission_map = {
             "view": self.can_view,
             "insert": self.can_insert,
@@ -67,7 +69,9 @@ class UserSession:
             return True
         if self.is_admin:
             return True
-        if module_key in {"users", "logs"}:
+        if module_key == "users":
+            return False
+        if module_key == "logs":
             return self.role == "manager"
 
         module_department = MODULE_DEPARTMENTS.get(module_key)
@@ -79,10 +83,10 @@ class UserSession:
 
     def can_operate_module(self, module_key: str, action: str) -> bool:
         """判断用户是否能在模块内执行指定动作。"""
+        if self.is_admin:
+            return True
         if action == "view":
             return self.can_access_module(module_key) and self.can_view
-        if self.is_admin:
-            return self.has_permission(action)
 
         module_department = MODULE_DEPARTMENTS.get(module_key)
         if module_department != self.department:
@@ -95,14 +99,7 @@ class UserSession:
 
     def can_manage_user(self, target: dict) -> bool:
         """判断是否可分配目标用户权限。"""
-        if self.is_admin:
-            return True
-        if self.role != "manager":
-            return False
-        return (
-            target.get("department") == self.department
-            and target.get("role") == "staff"
-        )
+        return self.is_admin
 
 
 class AuthService:
