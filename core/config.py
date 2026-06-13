@@ -85,12 +85,18 @@ def load_database_config() -> DatabaseConfig:
 def load_app_config() -> AppConfig:
     """加载界面展示配置。"""
     parser = _load_parser()
+    database_name = os.getenv(
+        "SCM_DB_NAME",
+        parser.get("database", "database", fallback="experiment2026"),
+    )
     return AppConfig(
         warehouse=parser.get("app", "warehouse", fallback="华东总仓"),
-        account_set=parser.get(
-            "app",
-            "account_set",
-            fallback="experiment2026",
+        account_set=os.getenv(
+            "SCM_ACCOUNT_SET",
+            os.getenv(
+                "SCM_DB_NAME",
+                parser.get("app", "account_set", fallback=database_name),
+            ),
         ),
         theme=parser.get("app", "theme", fallback="industrial"),
     )

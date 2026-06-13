@@ -9,5 +9,5 @@ pool_size = 5
 
 [app]
 warehouse = 华东总仓
-account_set = experiment2026
+# account_set 可省略；默认显示 database 或 SCM_DB_NAME。
 theme = industrial

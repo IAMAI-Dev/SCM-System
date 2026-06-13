@@ -11,7 +11,8 @@
 
 - Python 3.10 或更高版本。
 - MySQL 8.x。
-- 已在自己的 MySQL 中准备 `experiment2026` 数据库。
+- 已在自己的 MySQL 中准备课程数据库；库名可以自定义，默认示例名为
+  `experiment2026`。
 - Windows PowerShell 或 PyCharm 终端。
 
 ## 二、安装依赖
@@ -62,9 +63,11 @@ pool_size = 5
 
 [app]
 warehouse = 华东总仓
-account_set = experiment2026
 theme = industrial
 ```
+
+其中 `database` 填写你本机实际的数据库名。`account_set` 可省略；省略时
+界面顶部显示的账套名会跟随 `database`。
 
 注意：`config.ini` 已加入 `.gitignore`，不要把真实数据库密码提交到
 仓库。
@@ -78,6 +81,7 @@ theme = industrial
 - `SCM_DB_NAME`
 - `SCM_DB_POOL_NAME`
 - `SCM_DB_POOL_SIZE`
+- `SCM_ACCOUNT_SET`
 
 ## 四、启动程序
 
@@ -161,14 +165,14 @@ python tools\smoke_check.py
 ### 2. 登录账号不存在
 
 程序启动时会自动执行 `sql/05_seed.sql`。如果初始化失败，请检查
-`experiment2026` 数据库是否存在，以及当前 MySQL 用户是否有创建表、视图、
-存储过程和触发器的权限。
+`config.ini` 中 `database` 指向的数据库是否存在，以及当前 MySQL 用户
+是否有创建表、视图、存储过程和触发器的权限。
 
 ### 3. 页面数据为空
 
 本系统依赖课程数据库中的核心表，例如 `Customer`、`Orders`、
 `Lineitem`、`Part`、`PartSupp`、`Supplier`、`Nation`。请确认这些表
-已经导入到 `experiment2026` 数据库。
+已经导入到 `config.ini` 中 `database` 指向的数据库。
 
 ### 4. 触发器或存储过程初始化失败
 
