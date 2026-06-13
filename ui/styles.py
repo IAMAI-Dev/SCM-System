@@ -146,6 +146,18 @@ QPushButton#window_close_button:hover {
     color: #fffdf8;
 }
 
+QProgressBar#loading_bar {
+    background-color: #eee7dc;
+    border: 1px solid #d7d2c8;
+    border-radius: 4px;
+    max-height: 10px;
+}
+
+QProgressBar#loading_bar::chunk {
+    background-color: #b56b2a;
+    border-radius: 3px;
+}
+
 QFrame#content_panel,
 QFrame#login_panel,
 QFrame#analytics_card {

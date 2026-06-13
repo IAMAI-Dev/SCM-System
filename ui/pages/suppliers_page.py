@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
+from PySide6.QtCore import (
+    QObject,
+    QEasingCurve,
+    QPropertyAnimation,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -24,6 +32,26 @@ from service.supplier_service import SupplierKpi, SupplierService
 from ui.analytics_widgets import ChartCanvas, FadeFrame, chart_card
 
 
+class SupplierAnalysisWorker(QObject):
+    """后台加载供应商分析数据。"""
+
+    loaded = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, user_session: UserSession) -> None:
+        super().__init__()
+        self.user_session = user_session
+
+    def run(self) -> None:
+        """执行耗时数据库查询。"""
+        try:
+            analysis = SupplierService(self.user_session).load_analysis()
+        except Exception as exc:
+            self.failed.emit(str(exc))
+            return
+        self.loaded.emit(analysis)
+
+
 class SuppliersPage(QWidget):
     """供应商分析页面。"""
 
@@ -33,10 +61,12 @@ class SuppliersPage(QWidget):
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self.service = SupplierService(user_session)
+        self.user_session = user_session
         self.kpi_labels: list[tuple[QLabel, QLabel, QLabel]] = []
+        self._load_thread: QThread | None = None
+        self._load_worker: SupplierAnalysisWorker | None = None
         self._init_ui()
-        self.refresh()
+        QTimer.singleShot(0, self.refresh)
 
     def _init_ui(self) -> None:
         """初始化页面。"""
@@ -62,12 +92,22 @@ class SuppliersPage(QWidget):
         subtitle.setObjectName("meta_label")
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
-        refresh_button = QPushButton("刷新")
-        refresh_button.setObjectName("primary_button")
-        refresh_button.clicked.connect(self.refresh)
+        self.status_label = QLabel("等待加载")
+        self.status_label.setObjectName("meta_label")
+        self.loading_bar = QProgressBar()
+        self.loading_bar.setObjectName("loading_bar")
+        self.loading_bar.setRange(0, 0)
+        self.loading_bar.setFixedWidth(140)
+        self.loading_bar.setTextVisible(False)
+        self.loading_bar.setVisible(False)
+        self.refresh_button = QPushButton("刷新")
+        self.refresh_button.setObjectName("primary_button")
+        self.refresh_button.clicked.connect(self.refresh)
         toolbar.addLayout(title_box)
         toolbar.addStretch(1)
-        toolbar.addWidget(refresh_button)
+        toolbar.addWidget(self.status_label)
+        toolbar.addWidget(self.loading_bar)
+        toolbar.addWidget(self.refresh_button)
         layout.addLayout(toolbar)
 
         self.kpi_grid = QGridLayout()
@@ -145,17 +185,51 @@ class SuppliersPage(QWidget):
 
     def refresh(self) -> None:
         """刷新供应商分析数据。"""
-        try:
-            analysis = self.service.load_analysis()
-        except Exception as exc:
-            QMessageBox.critical(self, "查询失败", str(exc))
+        if self._load_thread is not None:
             return
 
+        self._set_loading(True)
+        self._load_thread = QThread(self)
+        self._load_worker = SupplierAnalysisWorker(self.user_session)
+        self._load_worker.moveToThread(self._load_thread)
+        self._load_thread.started.connect(self._load_worker.run)
+        self._load_worker.loaded.connect(self._handle_analysis_loaded)
+        self._load_worker.failed.connect(self._handle_analysis_failed)
+        self._load_worker.loaded.connect(self._load_thread.quit)
+        self._load_worker.failed.connect(self._load_thread.quit)
+        self._load_worker.loaded.connect(self._load_worker.deleteLater)
+        self._load_worker.failed.connect(self._load_worker.deleteLater)
+        self._load_thread.finished.connect(self._load_thread.deleteLater)
+        self._load_thread.finished.connect(self._clear_loader)
+        self._load_thread.start()
+
+    def _handle_analysis_loaded(self, analysis: dict) -> None:
+        """应用后台加载结果。"""
+        self._set_loading(False)
         self._apply_kpis(analysis["kpis"])
         self.bar_chart.draw_bar(analysis["bar_data"])
         self.donut_chart.draw_donut(analysis["country_data"])
         self.line_chart.draw_line(analysis["trend_data"])
         self._apply_ranking(analysis["ranking"])
+        self.status_label.setText("已加载供应商分析数据")
+
+    def _handle_analysis_failed(self, message: str) -> None:
+        """显示后台加载错误。"""
+        self._set_loading(False)
+        self.status_label.setText("供应商分析加载失败")
+        QMessageBox.critical(self, "查询失败", message)
+
+    def _clear_loader(self) -> None:
+        """清理后台加载对象引用。"""
+        self._load_thread = None
+        self._load_worker = None
+
+    def _set_loading(self, loading: bool) -> None:
+        """切换加载状态。"""
+        self.refresh_button.setEnabled(not loading)
+        self.loading_bar.setVisible(loading)
+        if loading:
+            self.status_label.setText("正在加载供应商分析...")
 
     def _apply_kpis(self, kpis: list[SupplierKpi]) -> None:
         """更新 KPI 文案。"""
