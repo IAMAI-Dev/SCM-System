@@ -44,19 +44,20 @@ def get_dashboard_kpis_fallback() -> dict:
 
 
 def get_sales_history(limit: int = 8) -> list[dict]:
-    """读取近期销售趋势。"""
+    """读取近期销售趋势（限定日期范围利用索引）。"""
     sql = """
         SELECT
             DATE_FORMAT(order_date, '%Y-%m') AS month,
             SUM(total_revenue) AS revenue,
             SUM(order_count) AS order_count
         FROM v_scm_daily_sales
+        WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL %s MONTH)
         GROUP BY month
         ORDER BY month DESC
         LIMIT %s
     """
     with cursor() as db_cursor:
-        db_cursor.execute(sql, (limit,))
+        db_cursor.execute(sql, (limit, limit))
         return list(reversed(db_cursor.fetchall()))
 
 

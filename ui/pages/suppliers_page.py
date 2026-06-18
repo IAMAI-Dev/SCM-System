@@ -130,9 +130,9 @@ class SuppliersPage(QWidget):
         self.chart_grid = QGridLayout()
         self.chart_grid.setSpacing(14)
 
-        self.bar_chart = LoadingChart(Figure(figsize=(7.0, 3.0), dpi=100))
-        self.donut_chart = LoadingChart(Figure(figsize=(4.8, 3.0), dpi=100))
-        self.line_chart = LoadingChart(Figure(figsize=(5.0, 3.0), dpi=100))
+        self.bar_chart = LoadingChart(Figure(figsize=(7.0, 3.0), dpi=85))
+        self.donut_chart = LoadingChart(Figure(figsize=(4.8, 3.0), dpi=85))
+        self.line_chart = LoadingChart(Figure(figsize=(5.0, 3.0), dpi=85))
 
         self.bar_card = chart_card(
             "各供应商供应量对比",
@@ -270,7 +270,7 @@ class SuppliersPage(QWidget):
             ),
         )
         QTimer.singleShot(
-            40,
+            60,
             lambda: self._render_chart(
                 self.donut_chart,
                 "draw_donut",
@@ -278,7 +278,7 @@ class SuppliersPage(QWidget):
             ),
         )
         QTimer.singleShot(
-            80,
+            120,
             lambda: self._render_chart(
                 self.line_chart,
                 "draw_line",

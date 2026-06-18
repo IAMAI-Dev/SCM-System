@@ -34,7 +34,7 @@ class SupplierService:
         suppliers = supplier_dao.list_suppliers(limit=80)
         summary = supplier_dao.get_supplier_summary()
         countries = supplier_dao.get_country_distribution()
-        trend = supplier_dao.get_purchase_trend()
+        trend = supplier_dao.get_purchase_trend(limit=12)
         ranked = self._rank_suppliers(suppliers)
         return {
             "kpis": self._build_kpis(summary, ranked, trend),

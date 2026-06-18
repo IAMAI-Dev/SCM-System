@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.db import cursor as db_cursor_ctx
 from dao import manager_dao
 from service.order_service import PermissionError
 
@@ -13,7 +14,7 @@ class ManagerService:
         self.user_session = user_session
 
     def load_analysis(self) -> dict[str, list[dict]]:
-        """加载经营分析数据。"""
+        """加载经营分析数据（复用单连接减少连接池开销）。"""
         if not self.user_session.is_manager:
             raise PermissionError("仅经理可查看经营分析")
 

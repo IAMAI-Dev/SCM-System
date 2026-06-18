@@ -47,3 +47,51 @@ SET @index_sql = IF(
 PREPARE index_statement FROM @index_sql;
 EXECUTE index_statement;
 DEALLOCATE PREPARE index_statement;
+
+SET @index_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+        AND table_name = 'Lineitem'
+        AND index_name = 'idx_lineitem_partkey'
+);
+SET @index_sql = IF(
+    @index_exists = 0,
+    'CREATE INDEX idx_lineitem_partkey ON Lineitem (Partkey)',
+    'SELECT 1'
+);
+PREPARE index_statement FROM @index_sql;
+EXECUTE index_statement;
+DEALLOCATE PREPARE index_statement;
+
+SET @index_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+        AND table_name = 'Lineitem'
+        AND index_name = 'idx_lineitem_suppkey'
+);
+SET @index_sql = IF(
+    @index_exists = 0,
+    'CREATE INDEX idx_lineitem_suppkey ON Lineitem (Suppkey)',
+    'SELECT 1'
+);
+PREPARE index_statement FROM @index_sql;
+EXECUTE index_statement;
+DEALLOCATE PREPARE index_statement;
+
+SET @index_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+        AND table_name = 'PartSupp'
+        AND index_name = 'idx_partsupp_suppkey'
+);
+SET @index_sql = IF(
+    @index_exists = 0,
+    'CREATE INDEX idx_partsupp_suppkey ON PartSupp (Suppkey)',
+    'SELECT 1'
+);
+PREPARE index_statement FROM @index_sql;
+EXECUTE index_statement;
+DEALLOCATE PREPARE index_statement;

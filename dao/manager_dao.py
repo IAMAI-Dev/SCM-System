@@ -6,13 +6,14 @@ from core.db import cursor
 
 
 def get_monthly_revenue() -> list[dict]:
-    """按月份统计有效发货明细营收。"""
+    """按月份统计有效发货明细营收（仅取最近 12 个月）。"""
     sql = """
         SELECT
             DATE_FORMAT(Shipdate, '%Y-%m') AS month,
             SUM(Extendedprice * (1 - Discount)) AS revenue
         FROM Lineitem
         WHERE Shipdate IS NOT NULL
+            AND Shipdate >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
         GROUP BY month
         HAVING revenue IS NOT NULL
         ORDER BY month
@@ -24,16 +25,20 @@ def get_monthly_revenue() -> list[dict]:
 
 
 def get_top_parts() -> list[dict]:
-    """统计销量最高的零件。"""
+    """统计销量最高的零件（先聚合再 JOIN 减少连接行数）。"""
     sql = """
         SELECT
             p.Name AS part_name,
-            SUM(l.Quantity) AS total_qty
-        FROM Lineitem l
-        JOIN Part p ON l.Partkey = p.Partkey
-        GROUP BY p.Partkey, p.Name
-        ORDER BY total_qty DESC
-        LIMIT 10
+            agg.total_qty
+        FROM (
+            SELECT Partkey, SUM(Quantity) AS total_qty
+            FROM Lineitem
+            GROUP BY Partkey
+            ORDER BY total_qty DESC
+            LIMIT 10
+        ) agg
+        JOIN Part p ON agg.Partkey = p.Partkey
+        ORDER BY agg.total_qty DESC
     """
     with cursor() as db_cursor:
         db_cursor.execute(sql)

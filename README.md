@@ -1,51 +1,70 @@
 # 供应链管理系统
 
-这是一个基于 PySide6 与 MySQL 的供应链管理桌面系统。系统采用分层
-架构，提供登录权限、仪表盘、订单管理、库存调度、客户管理、供应商
-分析、用户权限和审计日志等功能。
+基于 PySide6、MySQL 和 Matplotlib 的供应链管理桌面系统。项目采用
+`UI -> Service -> DAO -> MySQL` 分层架构，覆盖业务操作、权限、审计、
+分析图表、Excel 导出和数据库版本迁移。
 
-界面风格采用工业调度控制台设计：石墨色侧边栏、暖白顶部工具栏、
-暖灰内容区和铜色主操作按钮，强调真实企业桌面软件的数据密度与稳定感。
+新版入口是 `main.py`。根目录中的 `scm_gui.py` 与 `scm.txt` 是旧版
+Tkinter 实现，仅用于对照，不再作为开发入口。
 
-## 一、运行环境
+## 功能模块
 
-- Python 3.10 或更高版本。
-- MySQL 8.x。
-- 已在自己的 MySQL 中准备课程数据库；库名可以自定义，默认示例名为
-  `experiment2026`。
-- Windows PowerShell 或 PyCharm 终端。
+| 模块 | 主要能力 |
+| --- | --- |
+| 登录与欢迎页 | 账号认证、角色和部门权限、登录审计、轻量首屏 |
+| 总览仪表盘 | 订单、营收、客户、库存预警 KPI 和低库存快照 |
+| 订单管理 | 查询、明细、状态更新、模拟下单、Excel 导出 |
+| 库存调度 | 库存查询、低库存筛选、ABC 分类、补货建议、采购单生成 |
+| 客户管理 | 客户查询、维护和 Excel 导出 |
+| 供应商分析 | 供应量、国家分布、采购趋势、供应商评分与排名 |
+| 采购管理 | 查看补货采购单及其处理状态 |
+| 经营分析 | 月度营收、畅销零件、客户价值分布 |
+| 性能监控 | 表容量、估算行数和非主键索引清单 |
+| 用户与审计 | 用户权限维护、操作日志和订单状态审计 |
 
-## 二、安装依赖
+仪表盘和分析页面采用后台查询与局部加载状态。登录后先显示欢迎页，
+业务页面在首次点击时按需创建，避免启动阶段阻塞界面。
 
-进入克隆后的项目根目录，也就是包含 `main.py` 的目录：
+## 技术栈
 
-```powershell
-cd path\to\供应链管理系统
-```
-
-安装 Python 依赖：
-
-```powershell
-pip install -r requirements.txt
-```
-
-依赖包括：
-
-- PySide6
+- Python 3.10 或更高版本
+- PySide6 6.7+
+- MySQL 8.x
 - mysql-connector-python
-- matplotlib
+- Matplotlib
+- pandas 与 openpyxl，用于 Excel 导出
 
-## 三、配置数据库
+## 快速开始
 
-复制配置模板：
+以下命令在包含 `main.py` 的 `SCM-System` 目录执行。
+
+### 1. 创建虚拟环境
+
+```powershell
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+### 2. 准备数据库
+
+应用依赖已导入的课程基础表：
+
+- `Customer`
+- `Orders`
+- `Lineitem`
+- `Part`
+- `PartSupp`
+- `Supplier`
+- `Nation`
+
+程序会管理自身的用户、日志、补货订单、视图、存储过程、触发器和索引，
+但不会自动导入上述课程基础数据。
+
+### 3. 配置连接
 
 ```powershell
 Copy-Item config.ini.example config.ini
-```
-
-打开并修改本地配置：
-
-```powershell
 notepad config.ini
 ```
 
@@ -63,126 +82,139 @@ pool_size = 5
 
 [app]
 warehouse = 华东总仓
+account_set = experiment2026
 theme = industrial
 ```
 
-其中 `database` 填写你本机实际的数据库名。`account_set` 可省略；省略时
-界面顶部显示的账套名会跟随 `database`。
+`account_set` 可以省略；省略后顶部账套名跟随数据库名。真实的
+`config.ini` 已被 Git 忽略，不应提交数据库密码。
 
-注意：`config.ini` 已加入 `.gitignore`，不要把真实数据库密码提交到
-仓库。
+以下环境变量可覆盖配置文件：
 
-也可以通过环境变量覆盖数据库配置：
+| 环境变量 | 对应配置 |
+| --- | --- |
+| `SCM_DB_HOST` | 数据库主机 |
+| `SCM_DB_PORT` | 数据库端口 |
+| `SCM_DB_USER` | 数据库用户 |
+| `SCM_DB_PASSWORD` | 数据库密码 |
+| `SCM_DB_NAME` | 数据库名 |
+| `SCM_DB_POOL_NAME` | 连接池名称 |
+| `SCM_DB_POOL_SIZE` | 连接池大小 |
+| `SCM_ACCOUNT_SET` | 界面账套名 |
 
-- `SCM_DB_HOST`
-- `SCM_DB_PORT`
-- `SCM_DB_USER`
-- `SCM_DB_PASSWORD`
-- `SCM_DB_NAME`
-- `SCM_DB_POOL_NAME`
-- `SCM_DB_POOL_SIZE`
-- `SCM_ACCOUNT_SET`
-
-## 四、启动程序
-
-运行：
+### 4. 启动
 
 ```powershell
 python main.py
 ```
 
-程序启动时会自动初始化应用辅助数据库对象，包括：
+## 数据库迁移
 
-- `scm_users` 用户权限表
-- `scm_logs` 操作审计日志表
-- `scm_order_audit` 订单状态审计表
-- 库存、销售、供应商、客户相关视图
-- 仪表盘 KPI 存储过程
-- 用户与订单审计触发器
-- 演示登录账号
+启动时 `core/db.py` 会创建并读取 `scm_schema_migrations`。只执行尚未
+记录的 SQL 脚本，已经应用的脚本不会在每次启动时重复扫描大表。
 
-## 五、演示账号
+当前迁移顺序：
+
+1. `01_app_tables.sql`：用户、日志和订单审计表。
+2. `02_views.sql`：库存、销售、供应商和客户视图。
+3. `03_procedures.sql`：仪表盘存储过程。
+4. `04_triggers.sql`：用户与订单审计触发器。
+5. `05_seed.sql`：演示账号和必要的演示字段补全。
+6. `06.sql`：补货采购单表。
+7. `07_performance_indexes.sql`：经营分析与趋势查询索引。
+
+已有旧版数据库在对象完整时会自动建立迁移基线；全新数据库会按顺序
+执行全部迁移。新增迁移时应创建新的编号脚本，并追加到
+`MIGRATION_SCRIPTS`，不要修改已经发布迁移的语义。
+
+## 演示账号与权限
 
 默认演示账号密码均为 `123456`。
 
-| 用户名 | 部门 | 角色 | 说明 |
+| 用户名 | 部门 | 角色 | 权限摘要 |
 | --- | --- | --- | --- |
-| `admin` | 总管理 | admin | 总管理员，拥有全部权限 |
-| `David` | 采购部 | manager | 本部门完全控制，其他部门查询 |
-| `Tom` | 销售部 | manager | 本部门完全控制，其他部门查询 |
-| `Jerry` | 客户管理部 | manager | 本部门完全控制，其他部门查询 |
-| `Marry` | 采购部 | staff | 本部门查看和插入 |
-| `Jack` | 销售部 | staff | 本部门查看和插入 |
-| `Mike` | 客户管理部 | staff | 本部门查看和插入 |
+| `admin` | 总管理 | admin | 全部模块和全部操作 |
+| `David` | 采购部 | manager | 采购业务完全控制，其他业务可查询 |
+| `Tom` | 销售部 | manager | 销售业务完全控制，其他业务可查询 |
+| `Jerry` | 客户管理部 | manager | 客户业务完全控制，其他业务可查询 |
+| `Marry` | 采购部 | staff | 本部门查看和新增 |
+| `Jack` | 销售部 | staff | 本部门查看和新增 |
+| `Mike` | 客户管理部 | staff | 本部门查看和新增 |
 
-## 六、项目结构
+权限不仅控制侧边栏入口，写操作还会在 Service 层再次校验。管理员可管理
+用户权限，经理可查看经营分析，日志入口按角色限制。
+
+## 项目结构
 
 ```text
-供应链管理系统/
-├── main.py                 # PySide6 主入口
-├── config.ini.example      # 数据库配置模板
-├── requirements.txt        # Python 依赖
-├── README.md               # 项目说明
-├── core/                   # 配置、数据库连接池、初始化逻辑
-├── dao/                    # 数据访问层，只在这里写 SQL
-├── service/                # 业务服务层，负责权限和业务规则
-├── ui/                     # PySide6 界面层
-│   └── pages/              # 各业务页面
-├── sql/                    # 数据库辅助对象脚本
-├── tools/                  # 检查脚本
-├── docs/                   # 新版规范与实施计划
-├── scm_gui.py              # 旧 Tkinter 版本，仅作 legacy 参考
-└── scm.txt                 # 旧版文本副本，仅作 legacy 参考
+SCM-System/
+├── main.py                    # 应用入口、迁移、登录和主窗口
+├── config.ini.example         # 本地配置模板
+├── requirements.txt           # Python 依赖
+├── core/                      # 配置、连接池、事务和迁移
+├── dao/                       # 参数化 SQL 与数据库访问
+├── service/                   # 权限、业务规则和事务编排
+├── ui/                        # 主窗口、样式、模型和通用图表
+│   └── pages/                 # 各业务页面
+├── sql/                       # 有序数据库迁移脚本
+├── utils/                     # Excel 导出等通用工具
+├── tools/                     # 静态冒烟检查
+├── docs/                      # 项目规范、实施状态和运维说明
+├── analysis_results.md        # 历史问题分析报告
+├── task.md                    # 修复任务与完成状态
+└── changelog.md               # 新旧版本及迭代记录
 ```
 
-## 七、本地检查
+## 开发与验证
 
-运行语法编译检查：
+语法编译：
 
 ```powershell
 python -m compileall -q -x "(\.venv|\.git|\.idea|__pycache__)" .
 ```
 
-运行冒烟检查：
+静态冒烟检查：
 
 ```powershell
 python tools\smoke_check.py
 ```
 
-冒烟检查会确认：
+冒烟检查会验证 Python 语法、敏感旧配置片段，以及 UI 层是否直接包含
+SQL。涉及界面或数据库的修改还应使用真实 MySQL 进行联调，并至少检查
+`1320x840` 与 `980x620` 两种窗口尺寸。
 
-- Python 文件可编译。
-- 仓库中没有残留旧数据库密码片段。
-- UI 层没有直接编写 SQL。
+## 常见问题
 
-## 八、常见问题
+### 数据库连接失败
 
-### 1. 启动时报数据库连接失败
+确认 MySQL 服务已启动，并检查数据库地址、端口、账号、密码和数据库名。
+数据库账号需要创建表、视图、索引、存储过程和触发器的权限。
 
-请检查 `config.ini` 中的 `host`、`port`、`user`、`password` 和
-`database` 是否正确，并确认 MySQL 服务已启动。
+### 登录账号不存在
 
-### 2. 登录账号不存在
+检查 `scm_schema_migrations` 中是否存在 `05_seed.sql`。如果迁移失败，先
+修复数据库权限或基础表结构，再重新启动应用。
 
-程序启动时会自动执行 `sql/05_seed.sql`。如果初始化失败，请检查
-`config.ini` 中 `database` 指向的数据库是否存在，以及当前 MySQL 用户
-是否有创建表、视图、存储过程和触发器的权限。
+### 页面为空或统计为 0
 
-### 3. 页面数据为空
+确认课程基础表已经导入当前数据库。`Orders` 为空时订单类指标会显示 0；
+`Lineitem` 缺少日期时趋势图可能没有可用月份。
 
-本系统依赖课程数据库中的核心表，例如 `Customer`、`Orders`、
-`Lineitem`、`Part`、`PartSupp`、`Supplier`、`Nation`。请确认这些表
-已经导入到 `config.ini` 中 `database` 指向的数据库。
+### 图表首次加载较慢
 
-### 4. 触发器或存储过程初始化失败
+应用会在登录期间后台预热 Matplotlib，进入分析页后再异步查询。图表卡片
+显示加载状态属于正常行为；查询完成后应在当前页面直接出现，无需切页。
 
-请确认当前 MySQL 用户具备创建 `TRIGGER` 和 `PROCEDURE` 的权限。
-如果权限不足，可先使用管理员账号执行 `sql/` 目录中的脚本。
+### Excel 无法导出
 
-## 九、开发约束
+重新执行 `python -m pip install -r requirements.txt`，确认 pandas 和
+openpyxl 已安装，并选择当前用户有写权限的目录。
 
-- UI 层不允许写 SQL。
-- SQL 必须使用参数化查询。
-- 写操作必须通过 service 层做权限检查。
-- 数据库账号密码不得硬编码。
-- 每次阶段性开发都应运行检查并单独提交。
+## 文档索引
+
+- [项目规范](docs/PROJECT_SPEC.md)
+- [实施状态与维护计划](docs/IMPLEMENTATION_PLAN.md)
+- [部署与运维说明](docs/OPERATIONS.md)
+- [变更记录](changelog.md)
+- [历史分析报告](analysis_results.md)
+- [修复任务清单](task.md)

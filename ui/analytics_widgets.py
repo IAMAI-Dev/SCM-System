@@ -14,8 +14,9 @@ os.environ.setdefault("MPLCONFIGDIR", str(MPL_CONFIG_DIR))
 from matplotlib import font_manager, rcParams
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
-from PySide6.QtCore import QPropertyAnimation, Qt
+from PySide6.QtCore import QPropertyAnimation, QTimer, Qt
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QGraphicsOpacityEffect,
     QLabel,
@@ -92,7 +93,7 @@ class ChartCanvas(FigureCanvasQTAgg):
             self.figure = fig
         else:
             # 否则，创建一个默认大小的 Figure
-            self.figure = Figure(figsize=(5, height), dpi=100)
+            self.figure = Figure(figsize=(5, height), dpi=85)
 
         self.figure.patch.set_facecolor(CHART_BG)
         super().__init__(self.figure)
@@ -108,6 +109,24 @@ class ChartCanvas(FigureCanvasQTAgg):
         self._hover_targets = []
         self._point_targets = []
         self.mpl_connect("motion_notify_event", self._handle_motion)
+
+    def wheelEvent(self, event) -> None:
+        """将滚轮事件透传给父级 QScrollArea，避免画布拦截滚动。"""
+        scroll_area = self._find_parent_scroll_area()
+        if scroll_area is not None:
+            QApplication.sendEvent(scroll_area.viewport(), event)
+        else:
+            super().wheelEvent(event)
+
+    def _find_parent_scroll_area(self):
+        """向上查找最近的 QScrollArea。"""
+        from PySide6.QtWidgets import QScrollArea
+        parent = self.parent()
+        while parent is not None:
+            if isinstance(parent, QScrollArea):
+                return parent
+            parent = parent.parent()
+        return None
 
     def _draw_empty(self, message: str) -> None:
         """绘制空状态（防御性编程：数据为空时优雅展示）。"""
@@ -193,13 +212,13 @@ class ChartCanvas(FigureCanvasQTAgg):
         colors = [COPPER, TEAL, AMBER, GREEN, "#8b6f47", RED]
 
         self.figure.clear()
-        ax = self.figure.add_axes((0.03, 0.10, 0.58, 0.82))
+        ax = self.figure.add_axes((0.02, 0.05, 0.50, 0.90))
         wedges, _ = ax.pie(
             values,
             labels=None,
             colors=colors[: len(values)],
             startangle=90,
-            radius=0.92,
+            radius=0.88,
             wedgeprops={"width": 0.36, "edgecolor": CHART_BG},
         )
         ax.set_aspect("equal")
@@ -207,11 +226,13 @@ class ChartCanvas(FigureCanvasQTAgg):
             wedges,
             [str(label) for label in labels],
             loc="center left",
-            bbox_to_anchor=(0.64, 0.5),
+            bbox_to_anchor=(0.56, 0.5),
             frameon=False,
             fontsize=8,
             labelcolor=TEXT_COLOR,
             borderaxespad=0,
+            handletextpad=0.6,
+            labelspacing=0.8,
         )
         for text in legend.get_texts():
             _set_text_font(text)
@@ -357,7 +378,13 @@ class FadeFrame(QFrame):
         self.animation.setStartValue(0.0)
         self.animation.setEndValue(1.0)
         self.animation.setDuration(420)
+        self.animation.finished.connect(self._release_opacity_effect)
         self.animation.start()
+
+    def _release_opacity_effect(self) -> None:
+        """淡入结束后释放缓存特效，保证动态子控件正常重绘。"""
+        self.setGraphicsEffect(None)
+        self.opacity_effect = None
 
 
 class LoadingChart(QWidget):
@@ -367,8 +394,6 @@ class LoadingChart(QWidget):
         super().__init__(parent)
         self._figure = figure
         self._canvas: ChartCanvas | None = None
-        self.fade_effect: QGraphicsOpacityEffect | None = None
-        self.fade_animation: QPropertyAnimation | None = None
         figure_height = float(figure.get_size_inches()[1])
         self.setMinimumHeight(max(190, int(figure_height * 95)))
         self.setSizePolicy(
@@ -409,14 +434,6 @@ class LoadingChart(QWidget):
         """首次真正绘图时才创建 Matplotlib 画布。"""
         if self._canvas is None:
             self._canvas = ChartCanvas(self._figure)
-            self.fade_effect = QGraphicsOpacityEffect(self._canvas)
-            self.fade_effect.setOpacity(1.0)
-            self._canvas.setGraphicsEffect(self.fade_effect)
-            self.fade_animation = QPropertyAnimation(
-                self.fade_effect,
-                b"opacity",
-                self,
-            )
             self.stack.addWidget(self._canvas)
         return self._canvas
 
@@ -433,12 +450,18 @@ class LoadingChart(QWidget):
     def show_chart(self) -> None:
         canvas = self.canvas
         self.stack.setCurrentWidget(canvas)
-        if self.fade_animation is not None:
-            self.fade_animation.stop()
-            self.fade_animation.setStartValue(0.0)
-            self.fade_animation.setEndValue(1.0)
-            self.fade_animation.setDuration(220)
-            self.fade_animation.start()
+        self.stack.layout().activate()
+        canvas.updateGeometry()
+        QTimer.singleShot(0, self._draw_visible_canvas)
+
+    def _draw_visible_canvas(self) -> None:
+        """在画布可见且布局稳定后完成 Qt 与 Matplotlib 双重刷新。"""
+        canvas = self._canvas
+        if canvas is None or self.stack.currentWidget() is not canvas:
+            return
+        canvas.draw()
+        canvas.repaint()
+        self.stack.repaint()
 
 
 def chart_card(title: str, chart: QWidget) -> FadeFrame:

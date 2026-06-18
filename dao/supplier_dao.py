@@ -6,19 +6,16 @@ from core.db import cursor
 
 
 def list_suppliers(limit: int = 100) -> list[dict]:
-    """查询供应商表现。"""
+    """查询供应商表现（利用预建视图减少 JOIN 开销）。"""
     sql = """
         SELECT
-            s.Suppkey AS supplier_key,
-            s.Name AS supplier_name,
-            n.Name AS nation_name,
-            COUNT(ps.Partkey) AS part_count,
-            AVG(ps.Supplycost) AS avg_supply_cost,
-            SUM(ps.Availqty) AS total_available_qty
-        FROM Supplier s
-        JOIN Nation n ON n.Nationkey = s.Nationkey
-        LEFT JOIN PartSupp ps ON ps.Suppkey = s.Suppkey
-        GROUP BY s.Suppkey, s.Name, n.Name
+            supplier_key,
+            supplier_name,
+            nation_name,
+            part_count,
+            avg_supply_cost,
+            total_available_qty
+        FROM v_scm_supplier_performance
         ORDER BY part_count DESC, supplier_key ASC
         LIMIT %s
     """
@@ -59,34 +56,30 @@ def get_country_distribution(limit: int = 6) -> list[dict]:
 
 
 def get_purchase_trend(
-    limit: int = 6,
-    row_limit: int = 20000,
+    limit: int = 12,
 ) -> list[dict]:
-    """查询供应商相关采购额趋势。"""
+    """查询供应商相关采购额趋势（利用索引范围过滤替代全表排序）。"""
     sql = """
         SELECT
-            DATE_FORMAT(recent.Receiptdate, '%Y-%m') AS month,
-            SUM(recent.Extendedprice) AS purchase_amount,
-            COUNT(DISTINCT recent.Suppkey) AS supplier_count
-        FROM (
-            SELECT Receiptdate, Extendedprice, Suppkey
-            FROM Lineitem
-            ORDER BY Receiptdate DESC
-            LIMIT %s
-        ) recent
+            DATE_FORMAT(Receiptdate, '%Y-%m') AS month,
+            SUM(Extendedprice) AS purchase_amount,
+            COUNT(DISTINCT Suppkey) AS supplier_count
+        FROM Lineitem
+        WHERE Receiptdate IS NOT NULL
+            AND Receiptdate >= DATE_SUB(CURDATE(), INTERVAL %s MONTH)
         GROUP BY month
-        ORDER BY month DESC
+        ORDER BY month ASC
         LIMIT %s
     """
     with cursor() as db_cursor:
         db_cursor.execute(
             sql,
             (
-                _safe_limit(row_limit, 50000),
+                _safe_limit(limit, 24),
                 _safe_limit(limit, 24),
             ),
         )
-        return list(reversed(db_cursor.fetchall()))
+        return db_cursor.fetchall()
 
 
 def _safe_limit(value: int, maximum: int) -> int:

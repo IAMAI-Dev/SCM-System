@@ -35,25 +35,34 @@ def get_pool() -> pooling.MySQLConnectionPool:
     global _pool
     if _pool is None:
         config = load_database_config()
+        pool_kwargs = dict(
+            pool_name=config.pool_name,
+            pool_size=config.pool_size,
+            host=config.host,
+            port=config.port,
+            user=config.user,
+            password=config.password,
+            database=config.database,
+            charset="utf8mb4",
+            use_unicode=True,
+        )
         try:
             _pool = pooling.MySQLConnectionPool(
-                pool_name=config.pool_name,
-                pool_size=config.pool_size,
-                host=config.host,
-                port=config.port,
-                user=config.user,
-                password=config.password,
-                database=config.database,
-                charset="utf8mb4",
-                use_unicode=True,
-                use_pure=True,
+                **pool_kwargs, use_pure=False,
             )
-        except mysql.connector.Error as exc:
-            raise DatabaseError(
-                "无法连接到 MySQL 数据库，请检查 config.ini 或环境变量。"
-                f"\n原始错误：{exc}"
-            ) from exc
+        except Exception:
+            # C 扩展不可用时回退到纯 Python 驱动
+            try:
+                _pool = pooling.MySQLConnectionPool(
+                    **pool_kwargs, use_pure=True,
+                )
+            except mysql.connector.Error as exc:
+                raise DatabaseError(
+                    "无法连接到 MySQL 数据库，请检查 config.ini 或环境变量。"
+                    f"\n原始错误：{exc}"
+                ) from exc
     return _pool
+
 
 
 def get_connection():

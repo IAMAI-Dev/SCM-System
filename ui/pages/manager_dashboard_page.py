@@ -94,13 +94,13 @@ class ManagerDashboardPage(QWidget):
         chart_layout.setSpacing(14)
 
         self.revenue_chart = LoadingChart(
-            Figure(figsize=(7.2, 3.0), dpi=100)
+            Figure(figsize=(7.2, 3.0), dpi=85)
         )
         self.parts_chart = LoadingChart(
-            Figure(figsize=(7.2, 3.35), dpi=100)
+            Figure(figsize=(7.2, 3.35), dpi=85)
         )
         self.customer_chart = LoadingChart(
-            Figure(figsize=(7.2, 3.0), dpi=100)
+            Figure(figsize=(7.2, 3.0), dpi=85)
         )
         chart_layout.addWidget(chart_card("营收趋势", self.revenue_chart))
         chart_layout.addWidget(chart_card("畅销零件", self.parts_chart))
@@ -132,11 +132,11 @@ class ManagerDashboardPage(QWidget):
             lambda: self._render_revenue(data["monthly_revenue"]),
         )
         QTimer.singleShot(
-            40,
+            60,
             lambda: self._render_parts(data["top_parts"]),
         )
         QTimer.singleShot(
-            80,
+            120,
             lambda: self._render_customers(data["customer_value"]),
         )
 
