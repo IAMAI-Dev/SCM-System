@@ -47,7 +47,7 @@ def get_sales_history(limit: int = 8) -> list[dict]:
     """读取近期销售趋势。"""
     sql = """
         SELECT
-            DATE_FORMAT(order_date, '%%Y-%%m') AS month,
+            DATE_FORMAT(order_date, '%Y-%m') AS month,
             SUM(total_revenue) AS revenue,
             SUM(order_count) AS order_count
         FROM v_scm_daily_sales

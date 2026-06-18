@@ -1,6 +1,7 @@
+from __future__ import annotations
 """库存数据访问。"""
 
-from __future__ import annotations
+
 
 from core.db import cursor, transaction
 
@@ -71,3 +72,36 @@ def list_stock_values() -> list[dict]:
     with cursor() as db_cursor:
         db_cursor.execute(sql)
         return db_cursor.fetchall()
+
+
+def list_replenishment_orders() -> list[dict]:
+    """列出所有补货订单。"""
+    with cursor() as db_cursor:
+        sql = """
+            SELECT
+                order_id, part_key, supplier_key, quantity, status, created_at
+            FROM scm_replenishment_orders
+            ORDER BY created_at DESC
+        """
+        db_cursor.execute(sql)
+        return db_cursor.fetchall()
+
+
+def create_replenishment_order(
+    part_key: int,
+    supplier_key: int,
+    quantity: int,
+    db_cursor=None,
+) -> int:
+    """创建补货订单。"""
+    sql = """
+        INSERT INTO scm_replenishment_orders (part_key, supplier_key, quantity)
+        VALUES (%s, %s, %s)
+    """
+    if db_cursor is not None:
+        db_cursor.execute(sql, (part_key, supplier_key, quantity))
+        return db_cursor.lastrowid
+
+    with transaction() as tx_cursor:
+        tx_cursor.execute(sql, (part_key, supplier_key, quantity))
+        return tx_cursor.lastrowid

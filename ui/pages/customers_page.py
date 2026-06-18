@@ -1,6 +1,7 @@
+from __future__ import annotations
 """客户管理页面。"""
 
-from __future__ import annotations
+
 
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -19,7 +20,7 @@ from service.auth_service import UserSession
 from service.customer_service import CustomerService
 from service.order_service import PermissionError
 from ui.table_model import DictTableModel
-
+from utils.excel_exporter import export_table_view_to_excel
 
 class CustomersPage(QWidget):
     """客户管理页面。"""
@@ -46,10 +47,12 @@ class CustomersPage(QWidget):
         """初始化页面。"""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 18, 18, 18)
+
         toolbar = QHBoxLayout()
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("客户ID或名称")
         self.search_edit.returnPressed.connect(self.refresh)
+
         buttons = [
             ("查询", self.refresh, ""),
             ("新增", self.create_customer, "primary_button"),
@@ -61,6 +64,13 @@ class CustomersPage(QWidget):
             "编辑": "update",
             "删除": "delete",
         }
+
+        # --- 添加“导出 Excel”按钮（在工具栏最前面）
+        export_button = QPushButton("导出 Excel")
+        export_button.clicked.connect(self.export_to_excel)
+        toolbar.addWidget(export_button)
+
+
         toolbar.addWidget(self.search_edit)
         for text, handler, object_name in buttons:
             button = QPushButton(text)
@@ -212,3 +222,7 @@ class CustomersPage(QWidget):
             QMessageBox.critical(self, "删除失败", str(exc))
             return
         self.refresh()
+
+    def export_to_excel(self):
+        """一键导出当前表格数据为 Excel"""
+        export_table_view_to_excel(self.table, "客户报表", self)

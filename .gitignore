@@ -18,4 +18,6 @@ config.ini
 # Runtime output
 logs/
 exports/
+.matplotlib/
+debug_screens/
 *.log

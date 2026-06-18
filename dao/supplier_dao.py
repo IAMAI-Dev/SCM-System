@@ -65,7 +65,7 @@ def get_purchase_trend(
     """查询供应商相关采购额趋势。"""
     sql = """
         SELECT
-            DATE_FORMAT(recent.Receiptdate, '%%Y-%%m') AS month,
+            DATE_FORMAT(recent.Receiptdate, '%Y-%m') AS month,
             SUM(recent.Extendedprice) AS purchase_amount,
             COUNT(DISTINCT recent.Suppkey) AS supplier_count
         FROM (

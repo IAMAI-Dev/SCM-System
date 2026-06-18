@@ -1,3 +1,7 @@
+
+
+
+
 """主窗口与工业控制台布局。"""
 
 from __future__ import annotations
@@ -6,7 +10,7 @@ import sys
 from collections.abc import Callable
 from ctypes import wintypes
 
-from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -46,7 +50,7 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self)
-        self._switch_page("dashboard")
+        self._show_welcome_page()
 
     def _init_ui(self) -> None:
         """初始化主窗口布局。"""
@@ -103,6 +107,9 @@ class MainWindow(QMainWindow):
             ("suppliers", "供应商分析"),
             ("users", "用户权限"),
             ("logs", "审计日志"),
+            ("performance", "性能监控"),
+            ("manager", "经营分析"),
+            ("replenishment", "采购管理"),
         ]
         for page_key, title in nav_items:
             if not self.user_session.can_access_module(page_key):
@@ -146,6 +153,9 @@ class MainWindow(QMainWindow):
         self.stack.setContentsMargins(18, 18, 18, 18)
         layout.addWidget(self.stack, 1)
 
+        self.welcome_page = self._build_welcome_page()
+        self.stack.addWidget(self.welcome_page)
+
         self._register_page(
             "dashboard",
             "总览仪表盘",
@@ -175,7 +185,64 @@ class MainWindow(QMainWindow):
             self._register_page("users", "用户权限", self._create_users_page)
         if self.user_session.can_access_module("logs"):
             self._register_page("logs", "审计日志", self._create_logs_page)
+        if self.user_session.can_access_module("performance"):
+            self._register_page(
+                "performance",
+                "性能监控",
+                self._create_performance_page,
+            )
+        if self.user_session.can_access_module("manager"):
+            self._register_page(
+                "manager",
+                "经营分析",
+                self._create_manager_page,
+            )
+        if self.user_session.can_access_module("replenishment"):
+            self._register_page(
+                "replenishment",
+                "采购管理",
+                self._create_replenishment_page,
+            )
         return workspace
+
+    def _build_welcome_page(self) -> QWidget:
+        """构建登录后的轻量欢迎首屏，不触发业务查询。"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(42, 36, 42, 36)
+        layout.setSpacing(12)
+
+        layout.addStretch(1)
+        greeting = QLabel(f"欢迎回来，{self.user_session.display_name}")
+        greeting.setObjectName("login_title")
+        greeting.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        identity = QLabel(
+            f"{self.user_session.department_label} · {self.user_session.role}"
+        )
+        identity.setObjectName("meta_label")
+        identity.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        enter_button = QPushButton("进入总览仪表盘")
+        enter_button.setObjectName("primary_button")
+        enter_button.setFixedWidth(180)
+        enter_button.clicked.connect(
+            lambda checked=False: self._switch_page("dashboard")
+        )
+        layout.addWidget(greeting)
+        layout.addWidget(identity)
+        layout.addSpacing(12)
+        layout.addWidget(
+            enter_button,
+            0,
+            Qt.AlignmentFlag.AlignHCenter,
+        )
+        layout.addStretch(2)
+        return page
+
+    def _show_welcome_page(self) -> None:
+        """显示不依赖数据库查询的登录首屏。"""
+        self.current_page_key = "welcome"
+        self.page_title.setText("欢迎")
+        self.stack.setCurrentWidget(self.welcome_page)
 
     def _register_page(
         self,
@@ -380,25 +447,78 @@ class MainWindow(QMainWindow):
             event.accept()
         return started
 
-    def _update_resize_cursor(self, watched: QWidget, event) -> None:
-        """鼠标靠近窗口边缘时显示缩放光标。"""
-        cursor_shape = self._resize_cursor_for_edges(
-            self._resize_edges_at(self._event_global_pos(event))
-        )
-        if cursor_shape is None:
-            self._clear_resize_cursor()
+    def _create_performance_page(self):
+        from ui.pages.performance_page import PerformancePage
+        return PerformancePage(self.user_session)
+
+    def _create_dashboard_page(self):
+        from ui.pages.dashboard_page import DashboardPage
+        return DashboardPage()
+
+    def _create_orders_page(self):
+        from ui.pages.orders_page import OrdersPage
+        return OrdersPage(self.user_session)
+
+    def _create_inventory_page(self):
+        from ui.pages.inventory_page import InventoryPage
+        return InventoryPage(self.user_session)
+
+    def _create_customers_page(self):
+        from ui.pages.customers_page import CustomersPage
+        return CustomersPage(self.user_session)
+
+    def _create_suppliers_page(self):
+        from ui.pages.suppliers_page import SuppliersPage
+        return SuppliersPage(self.user_session)
+
+    def _create_users_page(self):
+        from ui.pages.users_page import UsersPage
+        return UsersPage(self.user_session)
+
+    def _create_logs_page(self):
+        from ui.pages.logs_page import LogsPage
+        return LogsPage(self.user_session)
+
+    def _create_manager_page(self):
+        from ui.pages.manager_dashboard_page import ManagerDashboardPage
+        return ManagerDashboardPage(self.user_session)
+
+    def _create_replenishment_page(self):
+        from ui.pages.replenishment_page import ReplenishmentPage
+        return ReplenishmentPage(self.user_session)
+
+    def _switch_page(self, page_key: str) -> None:
+        """切换到指定页面。"""
+        if page_key == self.current_page_key:
             return
+        self.current_page_key = page_key
+        self.page_title.setText(self.page_titles.get(page_key, ""))
+        self._ensure_page_loaded(page_key)
+        container = self.page_containers[page_key]
+        if container is not None:
+            self.stack.setCurrentWidget(container)
+        if page_key in self.nav_buttons:
+            self.nav_buttons[page_key].setChecked(True)
 
-        if self._resize_cursor_widget is not watched:
-            self._clear_resize_cursor()
-            self._resize_cursor_widget = watched
-        watched.setCursor(cursor_shape)
-
-    def _clear_resize_cursor(self) -> None:
-        """清除边缘缩放光标。"""
-        if self._resize_cursor_widget is not None:
-            self._resize_cursor_widget.unsetCursor()
-            self._resize_cursor_widget = None
+    def _ensure_page_loaded(self, page_key: str) -> None:
+        """确保页面内容已加载。"""
+        if page_key in self.loaded_pages:
+            return
+        factory = self.page_factories.get(page_key)
+        if factory is None:
+            return
+        page = factory()
+        container = self.page_containers[page_key]
+        layout = container.layout()
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(page, 1)
+        self._enable_resize_tracking(page)
+        self.loaded_pages.add(page_key)
 
     def _resize_edges_at(self, global_pos: QPoint | None):
         """返回指定全局坐标命中的窗口缩放边缘。"""
@@ -421,6 +541,26 @@ class MainWindow(QMainWindow):
         elif local_pos.y() >= self.height() - margin:
             edges |= Qt.Edge.BottomEdge
         return edges
+
+    def _update_resize_cursor(self, watched: QWidget, event) -> None:
+        """鼠标靠近窗口边缘时显示缩放光标。"""
+        cursor_shape = self._resize_cursor_for_edges(
+            self._resize_edges_at(self._event_global_pos(event))
+        )
+        if cursor_shape is None:
+            self._clear_resize_cursor()
+            return
+
+        if self._resize_cursor_widget is not watched:
+            self._clear_resize_cursor()
+            self._resize_cursor_widget = watched
+        watched.setCursor(cursor_shape)
+
+    def _clear_resize_cursor(self) -> None:
+        """清除边缘缩放光标。"""
+        if self._resize_cursor_widget is not None:
+            self._resize_cursor_widget.unsetCursor()
+            self._resize_cursor_widget = None
 
     def _resize_cursor_for_edges(self, edges):
         """根据缩放边缘返回鼠标光标。"""
@@ -450,90 +590,13 @@ class MainWindow(QMainWindow):
             return event.globalPos()
         return None
 
-    def _switch_page(self, page_key: str) -> None:
-        """切换当前页面。"""
-        index = list(self.page_titles.keys()).index(page_key)
-        self.stack.setCurrentIndex(index)
-        self.page_title.setText(self.page_titles[page_key])
-        self.current_page_key = page_key
-        button = self.nav_buttons.get(page_key)
-        if button is not None:
-            button.setChecked(True)
-        if page_key not in self.loaded_pages:
-            QTimer.singleShot(
-                0,
-                lambda key=page_key: self._ensure_page_loaded(key),
-            )
-
-    def _ensure_page_loaded(self, page_key: str) -> None:
-        """按需创建页面内容。"""
-        if page_key in self.loaded_pages:
-            return
-
-        container = self.page_containers[page_key]
-        layout = container.layout()
-        while layout.count():
-            item = layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-
-        page = self.page_factories[page_key]()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(page)
-        self._enable_resize_tracking(page)
-        self.loaded_pages.add(page_key)
-
-    def _create_dashboard_page(self) -> QWidget:
-        """创建总览页面。"""
-        from ui.pages.dashboard_page import DashboardPage
-
-        return DashboardPage()
-
-    def _create_orders_page(self) -> QWidget:
-        """创建订单页面。"""
-        from ui.pages.orders_page import OrdersPage
-
-        return OrdersPage(self.user_session)
-
-    def _create_inventory_page(self) -> QWidget:
-        """创建库存页面。"""
-        from ui.pages.inventory_page import InventoryPage
-
-        return InventoryPage(self.user_session)
-
-    def _create_customers_page(self) -> QWidget:
-        """创建客户页面。"""
-        from ui.pages.customers_page import CustomersPage
-
-        return CustomersPage(self.user_session)
-
-    def _create_suppliers_page(self) -> QWidget:
-        """创建供应商页面。"""
-        from ui.pages.suppliers_page import SuppliersPage
-
-        return SuppliersPage(self.user_session)
-
-    def _create_users_page(self) -> QWidget:
-        """创建用户页面。"""
-        from ui.pages.users_page import UsersPage
-
-        return UsersPage(self.user_session)
-
-    def _create_logs_page(self) -> QWidget:
-        """创建日志页面。"""
-        from ui.pages.logs_page import LogsPage
-
-        return LogsPage(self.user_session)
-
 
 def _signed_low_word(value: int) -> int:
-    """读取 Windows lParam 低位有符号坐标。"""
-    result = value & 0xFFFF
-    return result - 0x10000 if result & 0x8000 else result
-
+    """Windows LPARAM 低 16 位转换为有符号整数。"""
+    low = value & 0xFFFF
+    return low - 0x10000 if low >= 0x8000 else low
 
 def _signed_high_word(value: int) -> int:
-    """读取 Windows lParam 高位有符号坐标。"""
-    result = (value >> 16) & 0xFFFF
-    return result - 0x10000 if result & 0x8000 else result
+    """Windows LPARAM 高 16 位转换为有符号整数。"""
+    high = (value >> 16) & 0xFFFF
+    return high - 0x10000 if high >= 0x8000 else high

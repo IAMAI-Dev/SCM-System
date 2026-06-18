@@ -1,6 +1,7 @@
+from __future__ import annotations
 """订单管理页面。"""
 
-from __future__ import annotations
+
 
 from PySide6.QtWidgets import (
     QComboBox,
@@ -20,6 +21,7 @@ from core.db import DatabaseError
 from service.auth_service import UserSession
 from service.order_service import OrderService, PermissionError
 from ui.table_model import DictTableModel
+from utils.excel_exporter import export_table_view_to_excel  # 新增：导入导出工具
 
 
 class OrdersPage(QWidget):
@@ -68,11 +70,17 @@ class OrdersPage(QWidget):
             self.user_session.can_operate_module("orders", "insert")
         )
 
+        # === 新增：导出 Excel 按钮 ===
+        export_button = QPushButton("导出 Excel")
+        export_button.clicked.connect(self.export_to_excel)
+
+
         toolbar.addWidget(self.search_edit)
         toolbar.addWidget(refresh_button)
         toolbar.addWidget(detail_button)
         toolbar.addWidget(status_button)
         toolbar.addWidget(create_button)
+        toolbar.addWidget(export_button)  # 加入工具栏
         layout.addLayout(toolbar)
 
         self.status_label = QLabel("等待刷新")
@@ -118,6 +126,10 @@ class OrdersPage(QWidget):
         dialog.setWindowTitle(f"订单 {row['order_key']} 明细")
         dialog.resize(880, 460)
         layout = QVBoxLayout(dialog)
+        if not details:
+            empty_label = QLabel("该订单暂无明细数据。")
+            empty_label.setObjectName("meta_label")
+            layout.addWidget(empty_label)
         model = DictTableModel(
             [
                 ("line_number", "行号"),
@@ -146,14 +158,15 @@ class OrdersPage(QWidget):
             self,
             "更新状态",
             "选择新状态",
-            ["O", "F", "P"],
+            ["进行中 (O)", "已完成 (F)", "挂起 (P)"],
             0,
             False,
         )
         if not accepted:
             return
+        status_code = status.rsplit("(", 1)[-1].rstrip(")")
         try:
-            self.service.update_status(int(row["order_key"]), status)
+            self.service.update_status(int(row["order_key"]), status_code)
         except (PermissionError, DatabaseError, Exception) as exc:
             QMessageBox.critical(self, "更新失败", str(exc))
             return
@@ -195,3 +208,8 @@ class OrdersPage(QWidget):
 
         QMessageBox.information(self, "下单成功", f"新订单号：{new_key}")
         self.refresh()
+
+    # === 新增：一键导出 Excel 方法 ===
+    def export_to_excel(self):
+        """一键导出当前表格数据为 Excel"""
+        export_table_view_to_excel(self.table, "订单报表", self)

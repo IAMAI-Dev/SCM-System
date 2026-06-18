@@ -10,7 +10,12 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SKIP_PARTS = {".git", ".venv", ".idea", "__pycache__"}
 SKIP_FILES = {"config.ini", ".env"}
-EXAMPLE_FILES = {"README.md", "config.ini.example"}
+EXAMPLE_FILES = {
+    "README.md",
+    "config.ini.example",
+    "analysis_results.md",
+    "task.md",
+}
 SQL_LITERAL_RE = re.compile(
     r"\b(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\b\s+",
     re.IGNORECASE,

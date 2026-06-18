@@ -1,6 +1,8 @@
-"""供应商分析页面。"""
 
 from __future__ import annotations
+"""供应商分析页面。"""
+
+
 
 from PySide6.QtCore import (
     QObject,
@@ -29,7 +31,8 @@ from PySide6.QtWidgets import (
 
 from service.auth_service import UserSession
 from service.supplier_service import SupplierKpi, SupplierService
-from ui.analytics_widgets import ChartCanvas, FadeFrame, chart_card
+from ui.analytics_widgets import FadeFrame, LoadingChart, chart_card
+from matplotlib.figure import Figure
 
 
 class SupplierAnalysisWorker(QObject):
@@ -63,8 +66,11 @@ class SuppliersPage(QWidget):
         super().__init__(parent)
         self.user_session = user_session
         self.kpi_labels: list[tuple[QLabel, QLabel, QLabel]] = []
+        self.kpi_cards: list[FadeFrame] = []
         self._load_thread: QThread | None = None
         self._load_worker: SupplierAnalysisWorker | None = None
+        self.load_state = "idle"
+        self._has_data = False
         self._init_ui()
         QTimer.singleShot(0, self.refresh)
 
@@ -103,11 +109,17 @@ class SuppliersPage(QWidget):
         self.refresh_button = QPushButton("刷新")
         self.refresh_button.setObjectName("primary_button")
         self.refresh_button.clicked.connect(self.refresh)
+
+        export_button = QPushButton("导出 Excel")
+        export_button.clicked.connect(self.export_to_excel)
+
+
         toolbar.addLayout(title_box)
         toolbar.addStretch(1)
         toolbar.addWidget(self.status_label)
         toolbar.addWidget(self.loading_bar)
         toolbar.addWidget(self.refresh_button)
+        toolbar.addWidget(export_button)
         layout.addLayout(toolbar)
 
         self.kpi_grid = QGridLayout()
@@ -115,33 +127,72 @@ class SuppliersPage(QWidget):
         layout.addLayout(self.kpi_grid)
         self._build_kpi_cards()
 
-        chart_grid = QGridLayout()
-        chart_grid.setSpacing(14)
-        self.bar_chart = ChartCanvas(height=2.3)
-        self.donut_chart = ChartCanvas(height=2.3)
-        self.line_chart = ChartCanvas(height=2.0)
-        chart_grid.addWidget(
-            chart_card("各供应商供应量对比", self.bar_chart),
-            0,
-            0,
-            1,
-            2,
+        self.chart_grid = QGridLayout()
+        self.chart_grid.setSpacing(14)
+
+        self.bar_chart = LoadingChart(Figure(figsize=(7.0, 3.0), dpi=100))
+        self.donut_chart = LoadingChart(Figure(figsize=(4.8, 3.0), dpi=100))
+        self.line_chart = LoadingChart(Figure(figsize=(5.0, 3.0), dpi=100))
+
+        self.bar_card = chart_card(
+            "各供应商供应量对比",
+            self.bar_chart,
         )
-        chart_grid.addWidget(
-            chart_card("供应商国家分布", self.donut_chart),
-            0,
-            2,
+        self.donut_card = chart_card(
+            "供应商国家分布",
+            self.donut_chart,
         )
-        chart_grid.addWidget(
-            chart_card("采购额趋势（万元）", self.line_chart),
-            1,
-            0,
+        self.line_card = chart_card(
+            "采购额趋势（万元）",
+            self.line_chart,
         )
-        chart_grid.addWidget(self._build_rank_card(), 1, 1, 1, 2)
-        chart_grid.setColumnStretch(0, 2)
-        chart_grid.setColumnStretch(1, 2)
-        chart_grid.setColumnStretch(2, 2)
-        layout.addLayout(chart_grid)
+        self.rank_card = self._build_rank_card()
+        self._compact_chart_layout: bool | None = None
+        self._relayout_charts(compact=False)
+        layout.addLayout(self.chart_grid)
+
+    def resizeEvent(self, event) -> None:
+        """窄窗口改为单列图表，避免图例区域被压缩。"""
+        super().resizeEvent(event)
+        compact = event.size().width() < 900
+        self._relayout_kpis(compact)
+        self._relayout_charts(compact)
+
+    def _relayout_kpis(self, compact: bool) -> None:
+        for card in self.kpi_cards:
+            self.kpi_grid.removeWidget(card)
+        columns = 2 if compact else 4
+        for index, card in enumerate(self.kpi_cards):
+            self.kpi_grid.addWidget(
+                card,
+                index // columns,
+                index % columns,
+            )
+
+    def _relayout_charts(self, compact: bool) -> None:
+        if self._compact_chart_layout == compact:
+            return
+        self._compact_chart_layout = compact
+        for card in (
+            self.bar_card,
+            self.donut_card,
+            self.line_card,
+            self.rank_card,
+        ):
+            self.chart_grid.removeWidget(card)
+
+        if compact:
+            self.chart_grid.addWidget(self.bar_card, 0, 0, 1, 3)
+            self.chart_grid.addWidget(self.donut_card, 1, 0, 1, 3)
+            self.chart_grid.addWidget(self.line_card, 2, 0, 1, 3)
+            self.chart_grid.addWidget(self.rank_card, 3, 0, 1, 3)
+        else:
+            self.chart_grid.addWidget(self.bar_card, 0, 0, 1, 2)
+            self.chart_grid.addWidget(self.donut_card, 0, 2)
+            self.chart_grid.addWidget(self.line_card, 1, 0)
+            self.chart_grid.addWidget(self.rank_card, 1, 1, 1, 2)
+        for column in range(3):
+            self.chart_grid.setColumnStretch(column, 2)
 
     def _build_kpi_cards(self) -> None:
         """构建 KPI 卡片。"""
@@ -159,6 +210,7 @@ class SuppliersPage(QWidget):
             card_layout.addWidget(value)
             card_layout.addWidget(hint)
             self.kpi_labels.append((label, value, hint))
+            self.kpi_cards.append(card)
             self.kpi_grid.addWidget(card, 0, index)
 
     def _build_rank_card(self) -> FadeFrame:
@@ -177,6 +229,7 @@ class SuppliersPage(QWidget):
         self.rank_table.verticalHeader().setVisible(False)
         self.rank_table.setAlternatingRowColors(True)
         self.rank_table.horizontalHeader().setStretchLastSection(True)
+        self.rank_table.setMinimumHeight(245)
         self.rank_table.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers
         )
@@ -205,18 +258,60 @@ class SuppliersPage(QWidget):
 
     def _handle_analysis_loaded(self, analysis: dict) -> None:
         """应用后台加载结果。"""
-        self._set_loading(False)
         self._apply_kpis(analysis["kpis"])
-        self.bar_chart.draw_bar(analysis["bar_data"])
-        self.donut_chart.draw_donut(analysis["country_data"])
-        self.line_chart.draw_line(analysis["trend_data"])
         self._apply_ranking(analysis["ranking"])
-        self.status_label.setText("已加载供应商分析数据")
+        self.status_label.setText("正在渲染图表...")
+        QTimer.singleShot(
+            0,
+            lambda: self._render_chart(
+                self.bar_chart,
+                "draw_bar",
+                analysis["bar_data"],
+            ),
+        )
+        QTimer.singleShot(
+            40,
+            lambda: self._render_chart(
+                self.donut_chart,
+                "draw_donut",
+                analysis["country_data"],
+            ),
+        )
+        QTimer.singleShot(
+            80,
+            lambda: self._render_chart(
+                self.line_chart,
+                "draw_line",
+                analysis["trend_data"],
+                final=True,
+            ),
+        )
+
+    def _render_chart(
+        self,
+        chart: LoadingChart,
+        method_name: str,
+        rows: list[dict],
+        final: bool = False,
+    ) -> None:
+        """分批完成单次绘图，避免连续绘制阻塞事件循环。"""
+        getattr(chart.canvas, method_name)(rows)
+        chart.show_chart()
+        if final:
+            self._has_data = True
+            self.load_state = "loaded"
+            self._set_loading(False)
+            self.status_label.setText("已加载供应商分析数据")
 
     def _handle_analysis_failed(self, message: str) -> None:
         """显示后台加载错误。"""
+        first_load = not self._has_data
+        self.load_state = "error"
         self._set_loading(False)
         self.status_label.setText("供应商分析加载失败")
+        if first_load:
+            for chart in (self.bar_chart, self.donut_chart, self.line_chart):
+                chart.set_error("图表数据加载失败")
         QMessageBox.critical(self, "查询失败", message)
 
     def _clear_loader(self) -> None:
@@ -224,11 +319,22 @@ class SuppliersPage(QWidget):
         self._load_thread = None
         self._load_worker = None
 
+    def closeEvent(self, event) -> None:
+        """关闭页面时等待后台加载线程结束。"""
+        if self._load_thread is not None and self._load_thread.isRunning():
+            self._load_thread.quit()
+            self._load_thread.wait(3000)
+        super().closeEvent(event)
+
     def _set_loading(self, loading: bool) -> None:
         """切换加载状态。"""
         self.refresh_button.setEnabled(not loading)
         self.loading_bar.setVisible(loading)
         if loading:
+            if not self._has_data:
+                for chart in (self.bar_chart, self.donut_chart, self.line_chart):
+                    chart.set_loading()
+            self.load_state = "loading"
             self.status_label.setText("正在加载供应商分析...")
 
     def _apply_kpis(self, kpis: list[SupplierKpi]) -> None:
@@ -246,6 +352,7 @@ class SuppliersPage(QWidget):
             self._set_item(row_index, 0, self._rank_name(row_index, row))
             self._set_item(row_index, 1, row["nation_name"])
             self._set_item(row_index, 2, str(row["part_count"]))
+            self._set_item(row_index, 3, str(row["score"]))
             self.rank_table.setCellWidget(
                 row_index,
                 3,
@@ -293,3 +400,9 @@ class SuppliersPage(QWidget):
         bar.animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         bar.animation.start()
         return bar
+
+    def export_to_excel(self):
+        """一键导出当前排名表格数据为 Excel"""
+        from utils.excel_exporter import export_table_view_to_excel
+
+        export_table_view_to_excel(self.rank_table, "供应商排名报表", self)

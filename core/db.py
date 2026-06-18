@@ -14,6 +14,17 @@ from core.config import PROJECT_ROOT, load_database_config
 
 _pool: pooling.MySQLConnectionPool | None = None
 
+MIGRATION_SCRIPTS = (
+    "01_app_tables.sql",
+    "02_views.sql",
+    "03_procedures.sql",
+    "04_triggers.sql",
+    "05_seed.sql",
+    "06.sql",
+    "07_performance_indexes.sql",
+)
+BASELINE_SCRIPTS = MIGRATION_SCRIPTS[:-1]
+
 
 class DatabaseError(RuntimeError):
     """应用层数据库异常。"""
@@ -96,18 +107,21 @@ def sql_path(file_name: str) -> Path:
 
 
 def initialize_database_objects() -> None:
-    """初始化应用辅助表和数据库课程对象。"""
-    script_names = [
-        "01_app_tables.sql",
-        "02_views.sql",
-        "03_procedures.sql",
-        "04_triggers.sql",
-        "05_seed.sql",
-    ]
+    """仅执行尚未应用的数据库迁移。"""
     conn = get_connection()
     db_cursor = conn.cursor()
     try:
-        for script_name in script_names:
+        _ensure_migrations_table(db_cursor)
+        conn.commit()
+        applied = _get_applied_migrations(db_cursor)
+        if not applied and _database_objects_are_ready(db_cursor):
+            _record_baseline_migrations(db_cursor)
+            conn.commit()
+            applied.update(BASELINE_SCRIPTS)
+
+        for script_name in MIGRATION_SCRIPTS:
+            if script_name in applied:
+                continue
             path = sql_path(script_name)
             content = path.read_text(encoding="utf-8")
             for statement in _split_sql_statements(content):
@@ -117,13 +131,72 @@ def initialize_database_objects() -> None:
             if script_name == "01_app_tables.sql":
                 _migrate_legacy_users_table(db_cursor)
                 _migrate_legacy_logs_table(db_cursor)
-        conn.commit()
+            db_cursor.execute(
+                """
+                INSERT INTO scm_schema_migrations (migration_name)
+                VALUES (%s)
+                """,
+                (script_name,),
+            )
+            conn.commit()
     except Exception:
         conn.rollback()
         raise
     finally:
         db_cursor.close()
         conn.close()
+
+
+def _ensure_migrations_table(db_cursor) -> None:
+    """创建轻量迁移记录表。"""
+    db_cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS scm_schema_migrations (
+            migration_name VARCHAR(120) PRIMARY KEY,
+            applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        COMMENT='SCM 应用数据库迁移记录'
+        """
+    )
+
+
+def _get_applied_migrations(db_cursor) -> set[str]:
+    db_cursor.execute("SELECT migration_name FROM scm_schema_migrations")
+    return {row[0] for row in db_cursor.fetchall()}
+
+
+def _database_objects_are_ready(db_cursor) -> bool:
+    """判断旧版数据库是否已完整初始化，可直接建立迁移基线。"""
+    checks = (
+        ("TABLES", "TABLE_NAME", "scm_users"),
+        ("TABLES", "TABLE_NAME", "scm_replenishment_orders"),
+        ("VIEWS", "TABLE_NAME", "v_scm_inventory_status"),
+        ("ROUTINES", "ROUTINE_NAME", "sp_scm_dashboard_kpis"),
+        ("TRIGGERS", "TRIGGER_NAME", "trg_scm_users_after_insert"),
+    )
+    for source, column, object_name in checks:
+        db_cursor.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM information_schema.{source}
+            WHERE {('TABLE_SCHEMA' if source in {'TABLES', 'VIEWS'} else 'ROUTINE_SCHEMA' if source == 'ROUTINES' else 'TRIGGER_SCHEMA')} = DATABASE()
+                AND {column} = %s
+            """,
+            (object_name,),
+        )
+        if int(db_cursor.fetchone()[0]) == 0:
+            return False
+    return True
+
+
+def _record_baseline_migrations(db_cursor) -> None:
+    db_cursor.executemany(
+        """
+        INSERT IGNORE INTO scm_schema_migrations (migration_name)
+        VALUES (%s)
+        """,
+        [(name,) for name in BASELINE_SCRIPTS],
+    )
 
 
 def _split_sql_statements(sql_content: str) -> list[str]:

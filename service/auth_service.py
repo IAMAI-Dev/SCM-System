@@ -10,6 +10,7 @@ from dao import auth_dao
 MODULE_DEPARTMENTS = {
     "orders": "sales",
     "inventory": "procurement",
+    "replenishment": "procurement",
     "suppliers": "procurement",
     "customers": "customer",
 }
@@ -69,6 +70,8 @@ class UserSession:
             return True
         if self.is_admin:
             return True
+        if module_key == "manager":
+            return self.is_manager
         if module_key == "users":
             return False
         if module_key == "logs":

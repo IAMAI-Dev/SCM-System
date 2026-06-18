@@ -1,6 +1,7 @@
+from __future__ import annotations
 """用户权限页面。"""
 
-from __future__ import annotations
+
 
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -17,6 +18,7 @@ from service.admin_service import AdminService
 from service.auth_service import UserSession
 from service.order_service import PermissionError
 from ui.table_model import DictTableModel
+from utils.excel_exporter import export_table_view_to_excel  # 新增：导入导出工具
 
 
 class UsersPage(QWidget):
@@ -46,6 +48,7 @@ class UsersPage(QWidget):
         """初始化页面。"""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 18, 18, 18)
+
         toolbar = QHBoxLayout()
         toolbar.addStretch(1)
         refresh_button = QPushButton("刷新")
@@ -53,8 +56,15 @@ class UsersPage(QWidget):
         update_button = QPushButton("修改权限")
         update_button.setObjectName("primary_button")
         update_button.clicked.connect(self.update_permissions)
+
+        # === 新增：导出 Excel 按钮 ===
+        export_button = QPushButton("导出 Excel")
+        export_button.clicked.connect(self.export_to_excel)
+
+
         toolbar.addWidget(refresh_button)
         toolbar.addWidget(update_button)
+        toolbar.addWidget(export_button)  # 加入工具栏
         layout.addLayout(toolbar)
 
         self.table = QTableView()
@@ -110,3 +120,8 @@ class UsersPage(QWidget):
             QMessageBox.critical(self, "更新失败", str(exc))
             return
         self.refresh()
+
+    # === 新增：一键导出 Excel 方法 ===
+    def export_to_excel(self):
+        """一键导出当前表格数据为 Excel"""
+        export_table_view_to_excel(self.table, "用户权限报表", self)

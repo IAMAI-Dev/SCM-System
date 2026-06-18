@@ -71,6 +71,56 @@ class InventoryService:
                 result["C"] += 1
         return result
 
+    def get_replenish_suggestions(self) -> list[dict]:
+        """生成智能补货建议：返回库存低于100的零件及其建议补货量。"""
+        self._require("view")
+        all_inventory = self.list_inventory(low_only=False)
+        suggestions = []
+        for item in all_inventory:
+            current_qty = int(item.get("avail_qty") or 0)
+            if current_qty < 100:
+                suggestions.append({
+                    "part_key": item.get("part_key"),
+                    "part_name": item.get("part_name"),
+                    "supplier_name": item.get("supplier_name"),
+                    "avail_qty": current_qty,
+                    "suggest_qty": 100 - current_qty,
+                })
+        return suggestions
+
+    def list_replenishment_orders(self) -> list[dict]:
+        """列出所有补货订单。"""
+        self._require("view")
+        return inventory_dao.list_replenishment_orders()
+
+    def create_replenishment_order(
+        self,
+        part_key: int,
+        supplier_key: int,
+        quantity: int,
+    ) -> int:
+        """创建补货订单。"""
+        self._require("update")
+        part_key = int(part_key)
+        supplier_key = int(supplier_key)
+        quantity = int(quantity)
+        if part_key <= 0 or supplier_key <= 0:
+            raise ValueError("零件ID和供应商ID必须大于0")
+        if quantity <= 0:
+            raise ValueError("补货数量必须大于0")
+        with transaction() as db_cursor:
+            order_id = inventory_dao.create_replenishment_order(
+                part_key, supplier_key, quantity, db_cursor
+            )
+            auth_dao.log_action(
+                self.user_session.username,
+                "inventory",
+                "INSERT",
+                f"创建补货订单 {order_id}: 零件 {part_key} 供应商 {supplier_key} 数量 {quantity}",
+                db_cursor=db_cursor,
+            )
+            return order_id
+
     def _require(self, action: str) -> None:
         """检查采购模块权限。"""
         if not self.user_session.can_operate_module("inventory", action):

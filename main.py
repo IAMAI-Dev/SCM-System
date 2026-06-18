@@ -1,6 +1,7 @@
 """供应链管理系统新版入口。"""
 
 import sys
+import threading
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -10,10 +11,19 @@ from ui.main_window import MainWindow
 from ui.styles import INDUSTRIAL_QSS
 
 
+def _preload_analytics() -> None:
+    """在登录界面显示期间预热 Matplotlib 与中文字体缓存。"""
+    try:
+        from ui import analytics_widgets  # noqa: F401
+    except Exception:
+        return
+
+
 def main() -> int:
     """启动 PySide6 应用。"""
     app = QApplication(sys.argv)
     app.setStyleSheet(INDUSTRIAL_QSS)
+    threading.Thread(target=_preload_analytics, daemon=True).start()
     try:
         initialize_database_objects()
     except DatabaseError as exc:

@@ -119,3 +119,21 @@ ON DUPLICATE KEY UPDATE
     can_update = VALUES(can_update),
     can_delete = VALUES(can_delete),
     is_active = 1;
+
+-- 为课程基础数据补充演示字段，避免经营分析图表因 NULL 日期/余额显示为空。
+UPDATE Customer
+SET Acctbal = ROUND(500 + MOD(Custkey * 137, 20000), 2)
+WHERE Acctbal IS NULL;
+
+UPDATE Lineitem
+SET
+    Shipdate = DATE_SUB(CURRENT_DATE, INTERVAL MOD(Orderkey + Linenumber, 365) DAY),
+    Commitdate = COALESCE(
+        Commitdate,
+        DATE_SUB(CURRENT_DATE, INTERVAL MOD(Orderkey + Linenumber + 3, 365) DAY)
+    ),
+    Receiptdate = DATE_ADD(
+        DATE_SUB(CURRENT_DATE, INTERVAL MOD(Orderkey + Linenumber, 365) DAY),
+        INTERVAL 2 DAY
+    )
+WHERE Shipdate IS NULL OR Receiptdate IS NULL;

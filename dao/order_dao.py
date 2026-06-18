@@ -18,13 +18,18 @@ def list_orders(search_key: str = "", limit: int = 100) -> list[dict]:
         FROM Orders o
         JOIN Customer c ON c.Custkey = o.Custkey
     """
-    params: tuple = (limit,)
+    params: list = []
     if search_key:
-        base_sql += " WHERE o.Orderkey = %s OR c.Name LIKE %s"
-        params = (search_key, f"%{search_key}%", limit)
+        conditions = ["c.Name LIKE %s"]
+        params.append(f"%{search_key}%")
+        if search_key.isdigit():
+            conditions.insert(0, "o.Orderkey = %s")
+            params.insert(0, int(search_key))
+        base_sql += " WHERE " + " OR ".join(conditions)
     sql = base_sql + " ORDER BY o.Orderkey DESC LIMIT %s"
+    params.append(limit)
     with cursor() as db_cursor:
-        db_cursor.execute(sql, params)
+        db_cursor.execute(sql, tuple(params))
         return db_cursor.fetchall()
 
 
