@@ -159,10 +159,11 @@ SCM-System/
 ├── sql/                       # 有序数据库迁移脚本
 ├── utils/                     # Excel 导出等通用工具
 ├── tools/                     # 静态冒烟检查
-├── docs/                      # 项目规范、实施状态和运维说明
+├── docs/                      # 项目规范、变更记录、升级总结和运维说明
+│   ├── changelog.md           # 新旧版本及迭代记录
+│   └── 从初始版到当前版升级总结.md
 ├── analysis_results.md        # 历史问题分析报告
-├── task.md                    # 修复任务与完成状态
-└── changelog.md               # 新旧版本及迭代记录
+└── task.md                    # 修复任务与完成状态
 ```
 
 ## 开发与验证
@@ -215,6 +216,7 @@ openpyxl 已安装，并选择当前用户有写权限的目录。
 - [项目规范](docs/PROJECT_SPEC.md)
 - [实施状态与维护计划](docs/IMPLEMENTATION_PLAN.md)
 - [部署与运维说明](docs/OPERATIONS.md)
-- [变更记录](changelog.md)
+- [变更记录](docs/changelog.md)
+- [从初始版到当前版升级总结](docs/从初始版到当前版升级总结.md)
 - [历史分析报告](analysis_results.md)
 - [修复任务清单](task.md)
